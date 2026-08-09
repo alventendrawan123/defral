@@ -190,25 +190,24 @@ contract Probe {
 
 ### 0.3 🔴 PROBE 1 — `msg.sender` di bawah gas sponsorship (15 menit)
 
-**Ini nge-gate SELURUH tesis.** Kalau relayer sponsorship yang sampai ke kontrak, `require(msg.sender == agentExecutor)` runtuh.
+> **UPDATE: docs sekarang MENJAWAB ini, dan jawabannya mendukung desain kita.**
+>
+> Tabel mode signer di `/wallet-management/safe`:
+>
+> | Aspect | **EOA only** | Safe (Sender ON) |
+> |---|---|---|
+> | **`msg.sender` at the target contract** | **Turnkey EOA** | Safe |
+> | ERC4337 gas sponsorship eligible | **Yes** | No |
+>
+> Relayer memang muncul sebagai pengirim tx **LUAR** di explorer — tapi wallet org **di-delegate** (*"remaining your wallet, under your address"*), jadi panggilan dalam dieksekusi dalam konteks alamat wallet. **`require(msg.sender == agentExecutor)` jalan.**
+>
+> Probe ini **tetap dijalankan** sebagai konfirmasi empiris. Turun dari kill-condition jadi verifikasi.
 
-```bash
-curl -s -X POST https://app.keeperhub.com/api/execute/contract-call \
-  -H "Authorization: Bearer kh_..." -H "Content-Type: application/json" \
-  -H "Idempotency-Key: $(uuidgen)" \
-  -d '{"chainId":84532,"contractAddress":"<PROBE>","functionName":"bump",
-       "functionArgs":"[]","abi":"[{\"inputs\":[],\"name\":\"bump\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]"}' | jq
+Kalau probe **membantah** docs, jangan panik dan jangan pakai allowlist relayer — relayer dipakai bersama semua org KeeperHub, jadi allowlist bikin klaim *"cuma agent kami"* bohong.
 
-# poll status, lalu baca lastCaller dari chain via cast
-cast call <PROBE> "lastCaller()(address)" --rpc-url https://sepolia.base.org
-```
+**Pakai fallback ini:** hapus `onlyAgent` dari `guardRepay()` dan `sweepCoupon()`, buat keduanya **permissionless**. Skenario terburuknya: penyerang memaksa pembayaran utang borrower, dari allowance borrower, saat posisi memang tidak sehat, dibatasi `maxRepayPerEvent`, hanya ke pool. Itu persis yang borrower minta.
 
-| Hasil | Aksi |
-|---|---|
-| `lastCaller` == EOA enclave | ✅ Lanjut sesuai rencana |
-| `lastCaller` == alamat lain (relayer) | 🔴 **Rewrite hari ini juga.** Ganti jadi allowlist yang nerima relayer, dan **turunkan klaim di README secara terbuka** |
-
-**Simpan `transactionLink` → ini TX-0. Gate kriteria 1 pensiun di jam pertama.**
+Tesisnya justru menguat: **"kerugian tidak dijaga oleh SIAPA yang memanggil, melainkan oleh APA yang fungsinya sanggup ekspresikan."** Empat refusal receipt tetap hidup (`Healthy`, `StaleOracle`, `AlreadyActed`, `Revoked`); yang hilang cuma `NotAgent`.
 
 ### 0.4 🔴 PROBE 2 — apakah KeeperHub mem-broadcast tx yang bakal revert (15 menit)
 ```bash
@@ -568,6 +567,12 @@ choice GuardRepay : GuardRepayResult
 | Rate limit **60/min per API key** | — |
 | Gas sponsorship **butuh public mempool** → **mutually exclusive dengan private routing** | — |
 | **Testnet gas GRATIS** | broadcast kegagalan sengaja itu murah — **manfaatkan** |
+| **EIP-55 ketat di `/api/execute/transfer`** | Alamat mixed-case yang checksum-nya salah **ditolak**: `Invalid recipient address`. Pakai lowercase penuh atau checksum yang benar |
+| **Gas limit override absolut per node** | Bisa set gas limit langsung, **bypass multiplier**. Berguna kalau estimasi meleset |
+| **Ada retry on out-of-gas** | Docs: *"KeeperHub's retry logic may re-attempt with the default multiplier"* |
+| **Wallet org punya bytecode** | Explorer melabelinya *delegated* / *smart account*. **Normal** — itu yang bikin `msg.sender` tetap alamat wallet |
+| **Safe = nol gas sponsorship** | Kalau suatu saat pakai Safe sebagai Sender, sponsorship mati dan EOA wajib punya native gas |
+| **Zodiac Roles tidak ada di Base Sepolia** | Cuma Ethereum, Base, Arbitrum, Optimism, Polygon, **Ethereum Sepolia**. Jalur mainnet, bukan sekarang |
 
 ---
 
@@ -746,6 +751,23 @@ function test_abiSurface() public view { ... }
 | Test cuma happy path | Tiap `revert` punya test sendiri |
 | Doc comment mengulang nama fungsi | Ganti: siapa boleh, kenapa, apa yang sengaja tidak bisa |
 | `public` padahal cukup `external`/`private` | Visibilitas paling sempit yang masih jalan |
+
+---
+
+### 9.10 Tulis untuk mainnet, deploy ke testnet
+
+Tidak ada satu pun keputusan di kontrak ini yang boleh mengunci kita di testnet. Aturan konkretnya:
+
+| Aturan | Kenapa |
+|---|---|
+| **Nol alamat hardcoded.** Semua — token, oracle, pool — masuk lewat constructor | Mainnet = argumen deploy yang beda, nol perubahan kode |
+| **Oracle wajib berbentuk `AggregatorV3Interface`** | Ganti ke feed Chainlink asli = **satu alamat**. Ini alasan bentuk itu dipilih, bukan kebetulan |
+| **Nol asumsi gas gratis** | Di mainnet sponsorship punya plafon lalu jatuh ke EOA. Docs: *"it fails if that wallet has no native balance"*. Jangan pernah menulis logic yang mengandaikan gas nol |
+| **`allowCollateral` menerima instrumen apa pun** | Menambah RWA di mainnet = satu panggilan, bukan deploy ulang |
+| **Nol `chainId` hardcoded di kontrak** | Kalau butuh, baca `block.chainid` |
+| **Konstanta ekonomi (`LIQUIDATION_BPS`, bonus, batas trigger) = `constant`, bukan magic number** | Kalau mainnet butuh angka beda, satu tempat yang berubah dan compiler yang menemukannya |
+
+Satu hal yang **sengaja tidak** disiapkan untuk mainnet: `MockUSD`, `MockTreasury`, `MockLendingPool`, dan `NavOracle`. Itu memang perancah demo, dan README menyatakannya. Yang harus mainnet-ready adalah `DefralVault` — dan ia tidak pernah tahu bahwa tetangganya mock.
 
 ---
 

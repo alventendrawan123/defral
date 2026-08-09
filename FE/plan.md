@@ -587,6 +587,19 @@ Konsekuensi untuk kode: **tiap pembacaan data punya sumber mock yang setara**, d
 
 ---
 
+### 8.17 Tulis untuk mainnet, tampilkan testnet
+
+| Aturan | Kenapa |
+|---|---|
+| **Nama chain, alamat, dan URL explorer dari config** | Pindah ke mainnet = satu file config. Nol string `sepolia` tersebar di komponen |
+| **Nol asumsi "ini cuma demo" di copy** | Kalimat seperti *"nilai demo"* atau *"testnet"* harus datang dari satu banner yang bisa dimatikan, bukan ditulis di sepuluh tempat |
+| **Tautan bukti selalu dari `transactionLink`** | Docs: transaksi sponsored **tidak muncul di riwayat wallet**. Yang otoritatif adalah hash yang KeeperHub laporkan, dibuka langsung, lalu lihat tab **Logs / Internal Transactions / Token Transfers** |
+| **Format angka mengikuti desimal token dari kontrak** | dUSD 6 desimal sekarang, USDC 6 desimal di mainnet — tapi jangan hardcode `1e6`, baca `decimals()` |
+
+> 🔴 **Satu hal yang WAJIB ada di UI dan sering dilupakan:** saat menampilkan tautan transaksi, sertakan satu baris — *"transaksi ini disponsori: kolom `From` di explorer adalah relayer, aksi kami berjalan sebagai internal call. Lihat tab Logs."* Tanpa itu, juri membuka tautan dan mengira tidak terjadi apa-apa.
+
+---
+
 ## 9. 🔴 ATURAN DESAIN YANG MENGIKAT — turunan audit implementasi pendahulu
 
 Tujuh aturan di bawah ini **bukan saran**. **K1 adalah pole terpanjang di frontend dan tidak ada yang menyangkanya — baca duluan.**

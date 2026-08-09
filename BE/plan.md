@@ -546,6 +546,11 @@ Flush **setiap** response `/status` ke `docs/evidence/*.json` dan **commit**.
 | `receiptStatus` **5 nilai** + `unconfirmed` tak terdokumentasi | 3 terakhir = UNKNOWN |
 | Chain sponsored: `From` = relayer, aksi = internal call, **gak muncul di history wallet** | **selalu `transactionLink`** |
 | **Testnet gas GRATIS** | broadcast kegagalan sengaja itu murah |
+| **EIP-55 ketat** | `/api/execute/transfer` menolak alamat mixed-case yang checksum-nya tidak cocok: `Invalid recipient address`. Kita tidak memanggil `/transfer`, tapi address book REST kena aturan yang sama |
+| **Address book REST butuh `mcp:write`** | *"an unscoped `kh_` key is accepted, but a scoped key without that permission returns 403"* — **scope MEMANG ada**, dan key ber-scope bisa dibuat |
+| **Ada retry on out-of-gas** | *"KeeperHub's retry logic may re-attempt with the default multiplier"* |
+| **Wallet org punya bytecode** | Dilabeli *delegated* / *smart account* di explorer. Normal, dan itu yang menjaga `msg.sender` |
+| **`CS`/`BS`/`ES` = jangan retry** | Platform sudah retry sendiri. Lihat K1 |
 
 ---
 
@@ -800,21 +805,48 @@ Satu tempat untuk diperbaiki saat bentuk API bergeser — dan ia **akan** berges
 
 ---
 
+### 8.13 Tulis untuk mainnet, jalankan di testnet
+
+| Aturan | Kenapa |
+|---|---|
+| **Semua alamat dan chainId dari env**, nol literal di kode | Mainnet = ganti `.env`, bukan ganti kode |
+| **Nol asumsi gas gratis atau sponsorship aktif** | Di mainnet sponsorship punya plafon lalu jatuh ke EOA. Baca field `sponsored` dari response, **jangan diasumsikan** |
+| **Nol asumsi block time** | Base 2 detik, Ethereum 12 detik. Polling harus menghormati `X-Poll-Interval-Hint`, bukan `sleep` konstanta |
+| **Rate limit sebagai state, bukan error** | 60/min konservatif (docs quickstart menyebut 100/min authenticated). `403 daily spending cap` = **berhenti**, bukan retry |
+| **Arsip bukti tidak boleh bergantung API live** | Retensi log free-tier tidak terverifikasi. JSON ter-commit jalan di lingkungan apa pun |
+
+---
+
 ## 9. 🔴 ATURAN DESAIN YANG MENGIKAT — turunan audit implementasi pendahulu
 
 Tujuh aturan di bawah ini **bukan saran**. Semuanya turunan langsung dari audit baris-per-baris atas implementasi pendahulu. **K1 menggantikan kebijakan retry di §4.1.**
 
 
-### K1. 🔴 Kebijakan retry #1840 — BRANCH ON `revertReason`, lebih presisi dari attemptEpoch
+### K1. 🔴 Kebijakan retry — pakai taksonomi platform, bukan tebakan sendiri
 
-Ganti aturan `attemptEpoch` di §4.1 dengan ini:
+Ganti aturan retry di §4.1 dengan ini. Ada **dua jalur**, dan sinyalnya beda.
+
+**Jalur Direct Execution** (critical path kita):
 
 | Kondisi | Arti | Aksi |
 |---|---|---|
-| `status: "failed"` **DENGAN** `revertReason` | **Deterministik.** Observasi harga sudah dinilai dan ditolak. | **JANGAN retry.** Log. Tunggu `roundId` berikutnya. Replay cached 24 jam justru **BENAR** — itu lapisan idempotency kedua di bawah map in-memory agent |
-| `status: "failed"` **TANPA** `revertReason`, atau 5xx / network throw | **Infra.** Gak tahu mendarat atau enggak. | **Retry dengan key yang SAMA** — itu gunanya idempotency |
+| `status: "failed"` **DENGAN** `revertReason` | **Deterministik.** Observasi harga sudah dinilai dan ditolak | **JANGAN retry.** Tunggu `roundId` berikutnya. Replay cached 24 jam justru **benar** — itu lapisan idempotency kedua |
+| `status: "failed"` **TANPA** `revertReason`, atau 5xx / network throw | **Infra.** Tidak tahu mendarat atau tidak | **Retry dengan key yang SAMA** — itu gunanya idempotency |
 
-Lebih tajam dari `attemptEpoch++`, dan **memanfaatkan** #1840 alih-alih melawannya. Key tetap `sha256(chainId|vault|borrower|roundId)` — `roundId` yang berganti, bukan counter.
+**Jalur workflow** (W1-W4) — dan di sini platform **memberi kita klasifikasinya sendiri**:
+
+> Docs Run Error Codes: *"When a run fails for a reason on **KeeperHub's side** — the run logs show a short message with **a code**."* Sedangkan *"Configuration mistakes in your own workflow — an invalid address, a missing template variable, **a contract call that reverted** — are shown with their **full, actionable message instead of a code**."*
+
+| Sinyal | Arti | Aksi |
+|---|---|---|
+| Ada kode `E-` / `N-` / `P-` / `C-` | Sisi KeeperHub, hampir selalu sementara | Retry |
+| Tanpa kode, pesan lengkap (**termasuk revert**) | Kesalahan kita, deterministik | Jangan retry |
+| 🔴 **`CS-0001` / `BS-0001` / `ES-0001`** | Trigger **Schedule / Block / Event** gagal start | **DIAM. JANGAN BEREAKSI.** Docs: *"These retry automatically — no action needed."* **Retry kita = eksekusi ganda** |
+| `C-0003` / `C-0004` | Masalah internal, tim mereka otomatis diberi tahu | Retry tidak berbahaya tapi sia-sia. Catat |
+
+> **`CS`/`BS`/`ES` itu persis tiga trigger kita** — W1 `Event`, W2 `Schedule`, W3 `Block`. Ini satu-satunya kode di mana bereaksi **lebih buruk** daripada diam.
+
+Key tetap `sha256(chainId|vault|borrower|roundId)` — **`roundId` yang berganti, bukan counter attempt.**
 
 ### K2. 🔴 Kesenjangan idempotency kedua yang lo warisi
 

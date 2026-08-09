@@ -318,7 +318,9 @@ Constraint keras yang **membentuk** solusi ini, bukan sekadar mengganggunya:
 | **Borrower** | Set cadangan, set policy, revoke | ❌ tidak pernah |
 | **Turnkey enclave EOA** *(KeeperHub)* | **Dua fungsi agent. Itu saja.** | ✅ dan hanya ini |
 
-Private key ketiga **tidak pernah kami pegang** — KeeperHub yang menyimpannya di secure enclave.
+Kunci ketiga disimpan Turnkey di secure enclave. **Dan owner organisasi kami BISA mengekspornya** — KeeperHub mengizinkan itu, dan kami mengatakannya di muka.
+
+> **Itu tidak mengubah apa pun, dan justru itu intinya.** Keamanan Defral tidak berasal dari siapa yang memegang kunci. Kunci itu tetap hanya bisa memanggil dua fungsi nol-argumen yang menolak pada posisi sehat, dan tetap tidak bisa memindahkan cadangan Anda ke mana pun selain pool. Klaim yang bertahan diserang lebih baik daripada klaim yang lebih besar tapi rapuh.
 
 ### Satu siklus pertahanan
 
@@ -401,7 +403,8 @@ Prioritas: **M**ust · **S**hould · **C**ould. *Must* maksimum 60% effort.
 | **E2** | Transaksi ter-revert diterjemahkan jadi **kegagalan**, bukan sukses | M | KeeperHub balik HTTP 200 pada revert; agent harus throw | — |
 | **E3** | Hasil tidak diketahui (`timeout`/`not_found`/`unconfirmed`) **tidak pernah** memicu broadcast ulang | M | Direkonsiliasi lewat event onchain sendiri | G5 |
 | **E4** | Nol cycle bertumpuk | M | `OVERLAP_GUARD=off` mendemokan bug-nya; onchain menangkapnya | G6 |
-| **E5** | Retry membedakan kegagalan deterministik dari kegagalan infra | S | Revert dengan alasan → tidak retry. Error jaringan → retry | G5 |
+| **E5** | Retry membedakan kegagalan deterministik dari infra, mengikuti taksonomi platform | S | Berkode (`E-`/`N-`/`P-`/`C-`) → infra → retry key sama. Tanpa kode, termasuk revert → deterministik → tunggu observasi berikutnya | G5 |
+| **E7** | Kode trigger `CS-0001`/`BS-0001`/`ES-0001` **tidak pernah** memicu retry kami — platform sudah retry sendiri | S | Agent diam saat melihat ketiganya. Retry ganda = eksekusi ganda | G6 |
 | **E6** | Empat tipe trigger dipakai, masing-masing beralasan domain | S | Empat workflow aktif | §9 |
 
 ### F — Bukti & artefak · owner: islakun + bima
@@ -470,12 +473,31 @@ Prioritas: **M**ust · **S**hould · **C**ould. *Must* maksimum 60% effort.
 
 | | Alasan |
 |---|---|
-| `mcp:write` | Menaruh LLM di jalur pemindah uang mengontradiksi tesis kami |
+| Tool MCP yang menulis | Menaruh LLM di jalur pemindah uang mengontradiksi tesis kami. **Klaimnya tentang kode kami — nol panggilan ke tool MCP yang menulis, bisa diverifikasi dengan grep** — bukan tentang scope platform |
 | `/execute/transfer` | Bentuk query param `simulate` diabaikan (#1959). **Nol panggilan di seluruh repo** |
 | `/execute/node` | Endpoint terkuat platform, tapi hanya terverifikasi dari branch staging |
 | Plugin DeFi | Nol testnet, nol `simulate`, menghapus gerbang |
 
 **Yang TIDAK kami klaim:** nol klaim tentang exponential backoff · nol klaim MEV protection · nol klaim endpoint audit-trail platform. **Audit trail kami milik kami sendiri**, dibangun di atas status eksekusi dan event kami sendiri.
+
+### Kenapa kami tidak memakai Safe + Zodiac Roles — dan kenapa itu argumen, bukan kekurangan
+
+KeeperHub menyediakan lapisan otoritas on-chain lewat Zodiac Roles Modifier: allowlist protokol, **selector fungsi DAN argumennya**, plus cap per-token. Itu gagasan yang sama dengan gerbang kami.
+
+Dan dokumentasi mereka sendiri menyatakan batasnya, terang-terangan:
+
+> *"**At threshold 1 the role is policy, not boundary.**"*
+> *"The Turnkey EOA is both the Safe's sole owner AND the role holder, so it can call `safe.execTransaction(...)` directly — **bypasses the modifier entirely**."*
+> *"Treat policies as a **workflow-scoping tool, not as an absolute spending boundary**."*
+> Tabel mereka: **"Survives a compromised EOA: No."**
+
+**Perbedaannya struktural, bukan tingkat kekerasan.** Kebijakan Zodiac hidup di sisi **pemanggil** — dan pemanggil yang dikompromikan bisa mengambil jalur lain melewatinya. Gerbang Defral hidup di sisi **callee**. Tidak ada jalan memutar karena tidak ada yang bisa dilewati: kontrak tujuan yang menolak, siapa pun pemanggilnya.
+
+Dan satu hal yang membuat lapisan mereka **redundan bagi kami secara konstruksi**: kebijakan per-parameter mengunci selector **dan argumen**. Fungsi agent kami **nol argumen**. Tidak ada argumen yang perlu dibatasi.
+
+Alasan operasionalnya juga jelas: Zodiac tidak tersedia di Base Sepolia, dan Safe sebagai Sender **mematikan gas sponsorship** — sementara gas testnet gratis itulah yang membuat kami sanggup mem-broadcast penolakan sebagai bukti.
+
+> **Jalur mainnet:** di mainnet, Safe + Zodiac adalah lapisan pengerasan yang masuk akal **di atas** gerbang callee kami, bukan penggantinya. Multi-owner Safe dengan threshold > 1 menutup celah owner-bypass yang docs mereka akui.
 
 > Kejujuran tentang batas platform adalah bagian dari kedalaman, bukan pengurangnya.
 
@@ -496,7 +518,7 @@ Prioritas: **M**ust · **S**hould · **C**ould. *Must* maksimum 60% effort.
 
 | # | Pertanyaan | Kalau jawabannya buruk | Diprobe |
 |---|---|---|---|
-| **Q1** | `msg.sender` di bawah gas sponsorship — EOA enclave atau relayer? | **Seluruh tesis** perlu ditulis ulang jadi allowlist, dan klaim diturunkan terbuka | Sen 10 · menit 50 |
+| **Q1** | `msg.sender` di bawah gas sponsorship — EOA enclave atau relayer? **Docs menjawab: EOA.** Tabel mode signer menyatakan mode EOA-only memberi `msg.sender` = Turnkey EOA **dan** tetap eligible sponsorship; relayer hanya muncul sebagai pengirim tx LUAR di explorer, karena wallet ter-*delegate*. **Turun dari kill-condition jadi konfirmasi empiris.** | Kalau probe membantah docs: hapus `onlyAgent`, jadikan kedua fungsi permissionless — tesisnya justru menguat (*kerugian dijaga oleh APA yang fungsi sanggup ekspresikan, bukan SIAPA yang memanggil*) | Sen 10 · menit 50 |
 | **Q2** | Apakah KeeperHub mem-broadcast transaksi yang pasti revert? | **F2 dan F3 hilang** — bukti penolakan harus didesain ulang | Sen 10 · menit 65 |
 | **Q3** | Apakah `check-and-execute` menerima view nol-argumen? | Turun ke contract-call. **Downgrade, bukan kill** | Sen 10 · menit 80 |
 | **Q4** | Retensi log free-tier sampai 17-20 Agt? | Sudah dimitigasi oleh R4 | Sen 10 |
@@ -528,6 +550,26 @@ Prioritas: **M**ust · **S**hould · **C**ould. *Must* maksimum 60% effort.
 - **Grace period** ada sebagai state, bukan sebagai mesin 72 jam penuh.
 
 ---
+
+---
+
+## 15.5 JALUR MAINNET — apa yang berubah, dan apa yang tidak
+
+Defral dibangun di testnet, tapi **tidak ada satu pun keputusan desain yang mengunci kami di sana.** Ini dinyatakan karena juri akan menanyakannya, dan karena ia membentuk pilihan yang sudah kami ambil.
+
+| Komponen | Testnet sekarang | Mainnet | Yang berubah |
+|---|---|---|---|
+| **Oracle** | `NavOracle` mock, berbentuk `AggregatorV3Interface` | Feed Chainlink asli | **Satu alamat di constructor.** Bentuk interface-nya dipilih untuk ini sejak awal |
+| **Chain** | Base Sepolia `84532` | Base `8453` | Config. Gas sponsorship berlaku di keduanya |
+| **`msg.sender`** | Turnkey EOA (mode EOA) | Sama | Nol perubahan |
+| **Jaminan** | dUST + mXAU via `allowCollateral` | RWA tokenized asli | Satu panggilan `allowCollateral` per instrumen |
+| **Pool** | `MockLendingPool` | Protokol nyata **atau** pool kami | Vault menerima alamat pool di constructor, tidak pernah hardcoded |
+| **Cadangan** | allowance dUSD | allowance USDC | Nol perubahan — model non-custody identik |
+| **Gas** | disponsori, testnet gratis | disponsori sampai plafon, lalu dibayar EOA | **Kami tidak pernah bergantung pada sponsorship** — EOA tetap didanai. Docs: *"it fails if that wallet has no native balance"* |
+| **Pengerasan** | — | **Safe + Zodiac Roles** di atas gerbang callee, multi-owner threshold > 1 | Lapisan tambahan, bukan pengganti (§13) |
+
+**Yang tidak akan pernah berubah:** dua fungsi agent nol-argumen · gerbang di callee · cadangan tidak pernah meninggalkan wallet borrower · likuidasi permissionless. Itu properti kontrak, bukan properti lingkungan.
+
 
 ## 16. RILIS, GATE, DAN BUKTI
 
