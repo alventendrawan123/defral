@@ -24,7 +24,7 @@ PRD (`../PRD-defral.md`) menjawab **APA** dan **KENAPA**. Dokumen ini menjawab *
 
 > **Kalau keduanya bertentangan:** `plan.md` menang untuk **signature dan endpoint**; PRD menang untuk **perilaku dan batasan**. Kalau lo nemu pertentangan, lapor ke grup — bukan pilih sendiri.
 
-Tiap requirement di bawah punya acceptance criteria di **PRD §10**. Kolom **Gap** menunjuk ke temuan audit Cermin di **PRD §6** yang requirement itu tutup.
+Tiap requirement di bawah punya acceptance criteria di **PRD §10**. Kolom **Gap** menunjuk ke temuan audit implementasi pendahulu di **PRD §6** yang requirement itu tutup.
 
 | Req | Yang harus benar | Gap | Di plan ini |
 |---|---|---|---|
@@ -569,9 +569,240 @@ Flush **setiap** response `/status` ke `docs/evidence/*.json` dan **commit**.
 
 ---
 
-## 8. 🔴 ATURAN DESAIN YANG MENGIKAT — turunan audit Cermin
+## 8. STANDAR REKAYASA — cara nulis kode yang bertahan dibaca juri
 
-Tujuh aturan di bawah ini **bukan saran**. Semuanya turunan langsung dari audit baris-per-baris atas Cermin-RWA. **K1 menggantikan kebijakan retry di §4.1.**
+Juri menilai *"kualitas kode & dokumentasi"* sebagai **1 dari 4 kriteria**, dan lo menyetir Claude agent — agent akan dengan senang hati menghasilkan kode yang jalan tapi tidak bisa dipertahankan, kecuali lo mengikatnya.
+
+**Aturan buat agent lo:** kalau ia menghasilkan sesuatu yang melanggar standar di bawah, tolak dan minta ulang. Jangan "nanti dirapikan" — tidak akan sempat.
+
+### 8.1 Tiap file dibuka dengan pernyataan BATASnya
+
+Bukan ringkasan isi — **batas tanggung jawab**, dan apa yang secara sengaja tidak ada di sini.
+
+```ts
+// Bridge HTTP tipis.
+//
+// Satu service Express kecil antara frontend dan chain. SEMUA I/O chain
+// diisolasi di ./evm-ledger.ts — file ini hanya menyambungkan route HTTP ke
+// interface itu dan TIDAK PERNAH bicara ke chain secara langsung.
+```
+
+Kalimat terakhir itu yang bernilai: ia memberi tahu pembaca berikutnya **apa yang tidak boleh ditambahkan ke file ini.** Setiap modul dapat satu.
+
+### 8.2 Satu seam. Semua I/O di satu tempat.
+
+```
+guard.ts        ← logika keputusan. TIDAK PERNAH tahu backend-nya apa.
+   │              nol fetch, nol viem, nol URL, nol env var.
+   ▼
+interface Ledger  ← satu-satunya kontrak yang guard.ts kenal
+   ▲           ▲
+MockLedger   KeeperHubLedger   ← SEMUA I/O tinggal di sini
+```
+
+**Aturannya keras:** kalau lo mendapati diri menulis `fetch(` atau `publicClient.` di luar `keeperhub-ledger.ts`, berhenti. Seam-nya bocor.
+
+Imbalannya bukan estetika: **suite test yang sama jalan melawan mock dan melawan blockchain sungguhan**, tanpa satu karakter diubah. Juri menjalankannya sendiri.
+
+### 8.3 Dependency di-inject, bukan diimpor
+
+```ts
+// ✅ test membangun dengan MockLedger, produksi dengan KeeperHubLedger
+export function createApp(ledger: Ledger) { ... }
+
+// ✅ modul bisa diimpor test, dan tetap bisa dijalankan sebagai entrypoint
+const isMain = import.meta.url === `file://${process.argv[1]}`;
+if (isMain) {
+  const app = createApp(createLedger());
+  app.listen(Number(process.env.PORT ?? 3001));
+}
+```
+
+Modul yang membangun dependency-nya sendiri di module scope **tidak bisa dites tanpa network**.
+
+### 8.4 Error adalah kelas, dan dipetakan ke status di SATU tempat
+
+```ts
+export class LedgerValidationError extends Error {}   // input jelek       -> 400
+export class LedgerConflictError   extends Error {}   // state bentrok     -> 409
+export class ExecutionRevertedError extends Error {}  // chain menolak. DETERMINISTIK.
+export class ExecutionUnknownError  extends Error {}  // tidak tahu mendarat atau tidak
+export class SpendingCapError       extends Error {}  // BERHENTI. Jangan retry.
+```
+
+Handler tinggal `throw` — ada satu pembungkus yang menangkap, dan **satu** tempat yang memetakan kelas ke status:
+
+```ts
+const asyncRoute = (fn: AsyncHandler) =>
+  (req: Request, res: Response, next: NextFunction) => { fn(req, res).catch(next); };
+
+// satu error handler terpusat, di paling bawah
+app.use((err: unknown, _req, res, _next) => {
+  if (err instanceof LedgerConflictError)   return void res.status(409).json({ error: err.message });
+  if (err instanceof LedgerValidationError) return void res.status(400).json({ error: err.message });
+  console.error(err);
+  res.status(500).json({ error: 'internal error' });
+});
+```
+
+Kenapa penting di agent: **empat mode kegagalan butuh empat reaksi.** Kalau semuanya `throw new Error(msg)`, lo terpaksa mencocokkan string — dan pencocokan string akan salah pada saat paling tidak lo inginkan.
+
+```ts
+catch (e) {
+  if (e instanceof ExecutionUnknownError)  return reconcileViaEvent(roundId);   // JANGAN broadcast ulang
+  if (e instanceof ExecutionRevertedError) return log(`ditolak: ${e.message}`); // tunggu round berikutnya
+  if (e instanceof SpendingCapError)       return halt();
+  throw e;
+}
+```
+
+### 8.5 Handler 3-6 baris. Semua logic di seam.
+
+```ts
+app.get('/api/position', asyncRoute(async (req, res) => {
+  res.json(await ledger.getPosition(addressOf(req)));
+}));
+```
+
+Kalau sebuah route handler lebih dari ~8 baris, ada logic yang seharusnya turun ke seam.
+
+### 8.6 Fungsi murni untuk semua yang bisa murni
+
+```ts
+// ✅ nol I/O, nol Date.now, nol random, nol env. Trivial dites, trivial dipercaya.
+export function healthRatioBps(qty: number, price: number, debt: number): number
+
+// ❌ begitu sebuah fungsi butuh network buat dites, ia berhenti dites
+export async function healthRatioBps(vaultAddr: string): Promise<number>
+```
+
+Semua math masuk `health.ts` dan **tidak mengimpor apa pun kecuali tipe**.
+
+### 8.7 Komentar menjawab KENAPA, dan menyebut kegagalan yang dicegahnya
+
+Pola komentar terbaik di codebase ini: **keputusan + skenario kegagalan konkret.**
+
+```ts
+// Key = borrower + loanId, BUKAN loanId saja.
+// Di testnet bersama, banyak borrower bisa memakai loanId "loan-1" dan semuanya
+// bertindak atas satu observasi harga global. Key by loanId saja membuat rescue
+// borrower pertama menandai observasi itu "sudah ditindak", lalu diam-diam
+// MELEWATI setiap borrower lain — tanpa error, tanpa log.
+const loanKey = (loan: Loan) => `${loan.borrower} ${loan.loanId}`;
+```
+
+Dan untuk keputusan infrastruktur, sebutkan **konsekuensinya kalau tidak dilakukan**:
+
+```ts
+// PaaS memutus TLS di reverse proxy: tanpa ini, req.ip menunjuk ke alamat proxy
+// untuk SETIAP pengunjung, jadi rate limiter di bawah menghitung semua traffic
+// sebagai satu IP, bukan satu per pengunjung.
+app.set('trust proxy', true);
+```
+
+### 8.8 Isolasi kegagalan per-item
+
+```ts
+for (const item of items) {
+  try { await handle(item); }
+  catch (err) { log(`gagal pada ${item.id}: ${msg(err)}`); }   // lanjut, jangan lempar
+}
+```
+
+Poll berikutnya mencoba lagi dari state chain yang segar. Kalau satu error menghentikan seluruh siklus, **satu posisi rusak membuat semua posisi lain tidak terlindungi.**
+
+### 8.9 Test: satu helper seed dengan override, nama test berupa kalimat
+
+```ts
+/** Seed skenario demo: 10.000 @ 1.00, utang 6.000, trigger 13000 / target 14500,
+ *  cap 2.000 per event, cadangan 1.500. Tiap field bisa di-override per test. */
+function seedDemoScenario(ledger: MockLedger, o: {
+  price?: number; debt?: number; reserve?: number; couponSweep?: boolean;
+} = {}) {
+  const priceFeed = ledger.seedPriceFeed({
+    oracle: ORACLE, instrumentId: INSTRUMENT_ID,
+    price: o.price ?? 1.0,
+  } satisfies PriceFeed);          // ◀ `satisfies` — cek tipe TANPA melebarkan
+  ...
+}
+```
+
+Empat hal yang bikin pola ini bekerja:
+
+1. **Konstanta di atas file** — `const BORROWER = "..."`, `const INSTRUMENT_ID = "..."`. Nol string ajaib berserakan.
+2. **`satisfies` bukan `as`** — literal dicek terhadap tipe tanpa kehilangan inferensi. `as` mematikan pengecekan; `satisfies` memperkuatnya.
+3. **Pemisah digit** — `6_000`, `13_000`, `10_000`.
+4. **Override opsional dengan `??`** — tiap test menyatakan **hanya** yang relevan buat dirinya, dan pembacanya langsung tahu variabel mana yang sedang diuji.
+
+```ts
+seedDemoScenario(ledger, { reserve: 5_000 });  // cadangan berlimpah; hanya cap per-event yang boleh mengikat
+```
+
+Komentar sebaris itu menjelaskan **kenapa override-nya ada** — tanpa itu pembaca menebak.
+
+**Nama test = kalimat lengkap yang menyebut skenario DAN ekspektasinya:**
+
+```ts
+test("trigger fires at 126.7%, repays 758.62 to restore 145%, and never re-fires on the same price observation")
+test("dua borrower berbagi loanId yang sama — keduanya diselamatkan dalam satu poll")
+test("satu exercise yang throw tidak melewati loan berikutnya")
+test("status timeout tidak pernah memicu broadcast ulang")
+```
+
+**Assertion gagal dengan nilai sebenarnya**, bukan cuma "false != true":
+
+```ts
+assert.ok(Math.abs(loan.outstanding - 5241.38) < 0.01, `got ${loan.outstanding}`);
+```
+
+**Dan pin string yang menghadap manusia**, karena copy adalah bagian produknya:
+
+```ts
+assert.match(logs[0]!, /^Harga turun 24%\. Saya bayar \$758\.62 dari cadangan Anda\. Posisi aman\.$/);
+```
+
+Untuk menangkap log, satu helper kecil:
+
+```ts
+function capturingLogger() {
+  const logs: string[] = [];
+  return { logs, log: (m: string) => logs.push(m) };
+}
+```
+
+### 8.10 Tulis test SEBELUM klien HTTP-nya
+
+Untuk `keeperhub-ledger.ts`, tulis `keeperhub.test.ts` duluan dengan `stubFetch` (§1.6). Alasannya praktis: lo menulis klien untuk API yang perilakunya **belum lo lihat**. Test yang ditulis duluan memaksa lo **menyatakan asumsi** — dan asumsi yang dinyatakan bisa dibantah probe hari Senin, sementara asumsi yang tersembunyi di dalam implementasi tidak.
+
+### 8.11 Koersi tipe di satu tempat
+
+API mengembalikan angka sebagai string. Jangan `Number(x)` tersebar di 30 tempat.
+
+```ts
+const NUMERIC_FIELDS = { Position: ["debt", "collateralQty", "reserve"] } as const;
+function coerce<T>(raw: Record<string, unknown>, fields: readonly string[]): T
+```
+
+Satu tempat untuk diperbaiki saat bentuk API bergeser — dan ia **akan** bergeser.
+
+### 8.12 Gejala agent lo menghasilkan kode buruk
+
+| Gejala | Perbaikan |
+|---|---|
+| `fetch(` di luar modul seam | Pindahkan. Selalu |
+| `catch (e) { console.log(e) }` lalu lanjut seolah sukses | Kelas error + keputusan eksplisit |
+| `as SomeType` pada literal | `satisfies SomeType` |
+| `any` | Tipe nyata, atau `unknown` + penyempitan |
+| Route handler > 8 baris | Turunkan logic ke seam |
+| Test memanggil network | Injeksi `fetch`, stub-kan |
+| Fungsi mengembalikan `null` untuk tiga alasan berbeda | Discriminated union, atau lempar dengan kelas |
+| Nama test `test3` | Kalimat lengkap: skenario + ekspektasi |
+
+---
+
+## 9. 🔴 ATURAN DESAIN YANG MENGIKAT — turunan audit implementasi pendahulu
+
+Tujuh aturan di bawah ini **bukan saran**. Semuanya turunan langsung dari audit baris-per-baris atas implementasi pendahulu. **K1 menggantikan kebijakan retry di §4.1.**
 
 
 ### K1. 🔴 Kebijakan retry #1840 — BRANCH ON `revertReason`, lebih presisi dari attemptEpoch
@@ -585,11 +816,11 @@ Ganti aturan `attemptEpoch` di §4.1 dengan ini:
 
 Lebih tajam dari `attemptEpoch++`, dan **memanfaatkan** #1840 alih-alih melawannya. Key tetap `sha256(chainId|vault|borrower|roundId)` — `roundId` yang berganti, bukan counter.
 
-### K2. 🔴 Kesenjangan idempotency kedua yang Cermin punya dan lo warisi
+### K2. 🔴 Kesenjangan idempotency kedua yang lo warisi
 
-`StartGracePeriod` di Cermin **nonconsuming tanpa idempotency guard** → agent mencetak GracePeriod baru **tiap poll tick** selama vault kosong. Di EVM: cek `graceExpiry[borrower] == 0` sebelum manggil, dan kontrak juga nge-guard. Jangan warisi bug-nya.
+`StartGracePeriod` versi Daml **nonconsuming tanpa idempotency guard** → agent mencetak GracePeriod baru **tiap poll tick** selama vault kosong. Di EVM: cek `graceExpiry[borrower] == 0` sebelum manggil, dan kontrak juga nge-guard. Jangan warisi bug-nya.
 
-### K3. `sweepCoupon` di Cermin uncapped — bakal REVERT, bukan cap
+### K3. `sweepCoupon` versi Daml uncapped — bakal REVERT, bukan cap
 
 `SweepToLoan` nol cap. Kalau kupon > outstanding, `ApplyRepayment` **revert**. Kontrak EVM meng-cap di `min(couponDue, debt)` (SC K5) — jadi `KeeperHubLedger` lo **tidak perlu** meng-cap di sisi TypeScript. Jangan duplikasi logikanya.
 
@@ -614,7 +845,7 @@ Rekomendasi audit: bukan cuma `guardRepay` yang lewat KeeperHub. Jalankan `liqui
 
 Biayanya satu panggilan API ekstra, dan itu **membuktikan framework agent-nya melakukan lebih dari satu peran** — bukan satu bot dengan satu tombol.
 
-### K6. Batasan yang harus lo tahu — Cermin single-instrument permanen
+### K6. Batasan yang harus lo tahu — desainnya single-instrument permanen
 
 `TopUpCollateral` assert `token.instrumentId == collateralInstrumentId`, `AcceptOffer` assert `token.faceValue == collateralAmount` dengan **kesetaraan Decimal PERSIS**. Nol basket, nol partial pledge. `Position` EVM juga pin satu `collateralToken`. **Nyatakan di submission** daripada dibiarkan ketemu juri.
 
@@ -624,7 +855,7 @@ Yang lo bangun mengecilkan **penyebut** dan tidak pernah menyentuh pembilang. *"
 
 ---
 
-## 9. Prompt awal buat Claude lo
+## 10. Prompt awal buat Claude lo
 
 ```
 Baca dua dokumen ini lengkap, urut:
@@ -640,7 +871,7 @@ Urutan kerja:
   2. plan §1.7 — tulis test SEBELUM implementasi.
   3. plan §4.1 — KeeperHubLedger.
 
-Baca plan §8 (ATURAN DESAIN YANG MENGIKAT). K1 di situ MENGGANTIKAN kebijakan retry di §4.1.
+Baca plan §9 (ATURAN DESAIN YANG MENGIKAT). K1 di situ MENGGANTIKAN kebijakan retry di §4.1.
 
 Aturan keras:
 - Bentuk interface Ledger tidak boleh berubah setelah lo tulis. Suite test yang sama harus lulus

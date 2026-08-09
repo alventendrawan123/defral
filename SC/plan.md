@@ -31,7 +31,7 @@ PRD (`../PRD-defral.md`) menjawab **APA** dan **KENAPA**. Dokumen ini menjawab *
 
 > **Kalau keduanya bertentangan:** `plan.md` menang untuk **signature dan endpoint**; PRD menang untuk **perilaku dan batasan**. Kalau lo nemu pertentangan, lapor ke grup — bukan pilih sendiri.
 
-Tiap requirement di bawah punya acceptance criteria di **PRD §10**. Kolom **Gap** menunjuk ke temuan audit Cermin di **PRD §6** yang requirement itu tutup.
+Tiap requirement di bawah punya acceptance criteria di **PRD §10**. Kolom **Gap** menunjuk ke temuan audit implementasi pendahulu di **PRD §6** yang requirement itu tutup.
 
 | Req | Yang harus benar | Gap | Di plan ini |
 |---|---|---|---|
@@ -68,8 +68,8 @@ Tiap requirement di bawah punya acceptance criteria di **PRD §10**. Kolom **Gap
 | D1 | **Non-custodial.** Vault **tidak pernah** memegang dUSD reserve | Reserve = `min(dUSD.balanceOf(borrower), dUSD.allowance(borrower, vault))`. Nol `topUp()`, nol `withdraw()` |
 | D2 | **Satu vault per borrower**, di-deploy `DefralVaultFactory` | Vault gak nyimpen apa-apa → deploy per-borrower murah. Ini yang bikin `guardRepay()` **zero-argument**, dan zero-arg yang bikin `check-and-execute` bisa dipakai |
 | D3 | **Collateral DI-ESCROW** di `MockLendingPool` | Itu memang arti pledge. Beda dengan reserve — dan bedanya adalah cerita produknya |
-| D4 | Defence = **REPAY**, bukan top-up collateral | Verifikasi kode Cermin: `TopUpCollateral` controller-nya **borrower**, agent gak bisa manggil. Dan `/api/execute/swap` KeeperHub adalah **stub 501** |
-| D5 | **`liquidate()` ADA dan bisa dipanggil siapa pun** | Cermin versi Canton **tidak pernah** menyita collateral (`LastResortDefault` badannya `pure ()`). Di EVM kita bisa, dan itu bikin taruhannya bisa diklik |
+| D4 | Defence = **REPAY**, bukan top-up collateral | Terverifikasi dari implementasi pendahulu: `TopUpCollateral` controller-nya **borrower**, agent gak bisa manggil. Dan `/api/execute/swap` KeeperHub adalah **stub 501** |
+| D5 | **`liquidate()` ADA dan bisa dipanggil siapa pun** | Implementasi Canton sebelumnya **tidak pernah** menyita collateral (`LastResortDefault` badannya `pure ()`). Di EVM kita bisa, dan itu bikin taruhannya bisa diklik |
 | D6 | Oracle **berbentuk `AggregatorV3Interface`** | `roundId` monoton = penerus EVM dari consuming choice Canton. Jalur mainnet nanti = ganti satu alamat |
 
 ---
@@ -424,7 +424,7 @@ function latestRoundData() external view
 
 ### 4.4 `MockLendingPool.sol` (~120 baris) — 🔴 ADA `liquidate()`
 
-Ini nutup lubang yang ketahuan dari audit Cermin: versi Canton **tidak pernah menyita apa pun** (`LastResortDefault` badannya `pure ()`).
+Ini nutup lubang yang ketahuan dari audit implementasi pendahulu: versi Canton **tidak pernah menyita apa pun** (`LastResortDefault` badannya `pure ()`).
 
 ```solidity
 uint16 public constant LIQUIDATION_THRESHOLD = 11000;  // 110%
@@ -454,7 +454,7 @@ function liquidate(address borrower) external {
 
 ## 5. Foundry test — `SC/test/`
 
-Terjemahkan skenario dari logic Daml aslinya. **Lo tidak butuh folder Cermin** — inilah tiga potong logic yang harus ditranskripsi, disalin verbatim dari sumbernya:
+Terjemahkan skenario dari logic Daml aslinya. **Lo tidak butuh repo lain** — inilah tiga potong logic yang harus ditranskripsi, disalin verbatim dari sumbernya:
 
 ```haskell
 -- Credit.daml:15-17 — formula health ratio KANONIK. round = half away from zero.
@@ -503,7 +503,7 @@ choice GuardRepay : GuardRepayResult
 -- Coupon.daml:73-108 — SweepToLoan. ⚠️ SENGAJA NOL health gate.
     assertMsg "coupon sweep is not enabled on this policy" policy.couponSweep
     -- "sweeping a coupon is a proactive paydown, not a breach response"
-    -- ⚠️ Cermin TIDAK meng-cap ini. Di EVM WAJIB di-cap: min(couponDue, debt). Lihat K5.
+    -- ⚠️ Versi Daml TIDAK meng-cap ini. Di EVM WAJIB di-cap: min(couponDue, debt). Lihat K5.
 ```
 
 ### Skenario test yang harus dicover (dari `GuardTests.daml`)
@@ -588,12 +588,173 @@ choice GuardRepay : GuardRepayResult
 
 ---
 
-## 9. 🔴 ATURAN DESAIN YANG MENGIKAT — turunan audit Cermin
+## 9. STANDAR REKAYASA — cara nulis kode yang bertahan dibaca juri
 
-Sepuluh aturan di bawah ini **bukan saran**. Semuanya turunan langsung dari audit baris-per-baris atas Cermin-RWA, dan semuanya menutup satu baris di PRD §6. **Baca sebelum menulis satu baris Solidity.**
+Juri menilai *"kualitas kode & dokumentasi"* sebagai **1 dari 4 kriteria**, dan lo menyetir Claude agent — agent akan dengan senang hati menghasilkan kode yang jalan tapi tidak bisa dipertahankan, kecuali lo mengikatnya.
+
+**Aturan buat agent lo:** kalau ia menghasilkan sesuatu yang melanggar standar di bawah, tolak dan minta ulang. Jangan "nanti dirapikan" — tidak akan sempat.
+
+### 9.1 Doc comment menjawab SIAPA BOLEH APA, bukan mengulang nama fungsi
+
+Ini standar tunggal yang paling menaikkan kualitas terbaca kontrak lo. Tiap fungsi yang mengubah state dapat blok yang menyatakan **siapa boleh memanggil, kenapa ia berhak, dan apa yang secara sengaja TIDAK bisa ia lakukan.**
+
+```solidity
+/// @notice Satu-satunya jalan agent memindahkan dana borrower.
+/// @dev    SIAPA: hanya `agentExecutor` — EOA enclave yang kuncinya tidak pernah kita pegang.
+///         KENAPA BOLEH: borrower memberi allowance ke vault ini; tidak ada
+///         otoritas lain yang dibawa fungsi ini ke mana pun.
+///         YANG SENGAJA TIDAK BISA: mengirim ke alamat mana pun selain `pool`,
+///         mengirim jumlah pilihan sendiri, atau bertindak pada posisi sehat.
+///         Ketiganya bukan kelalaian — itu tesis produknya.
+function guardRepay() external onlyAgent { ... }
+```
+
+Pembaca berikutnya — dan juri — tidak akan menyimpulkan itu dari `function guardRepay()`.
+
+### 9.2 Satu `require` untuk satu invariant, dengan error yang menyebut alasannya
+
+```solidity
+// ❌ satu revert, dua kemungkinan, nol informasi
+require(h0 < policy.triggerBps && block.timestamp - updatedAt < MAX_STALE, "bad state");
+
+// ✅ tiap penolakan punya nama sendiri, dan namanya muncul di BaseScan
+if (updatedAt + MAX_STALE < block.timestamp) revert Refused_StaleOracle(updatedAt, MAX_STALE);
+if (h0 >= policy.triggerBps)                 revert Refused_Healthy(h0, policy.triggerBps);
+```
+
+> 🔴 **Ini deliverable, bukan preferensi.** Nama error custom lo **muncul di halaman BaseScan** transaksi ter-revert, dan transaksi ter-revert adalah bukti utama submission. `Refused_Healthy(16667, 13000)` menceritakan seluruh cerita tanpa satu baris dokumentasi. `"bad state"` tidak menceritakan apa pun.
+
+Custom error juga lebih murah dari string revert. Pakai custom error, selalu.
+
+### 9.3 Checks-Effects-Interactions, tanpa pengecualian
+
+```solidity
+function guardRepay() external onlyAgent {
+    // 1. CHECKS — semua pembacaan dan semua penolakan
+    (uint80 roundId, int256 price,, uint256 updatedAt,) = oracle.latestRoundData();
+    if (roundId == lastActedRound)               revert Refused_AlreadyActed(roundId);
+    uint16 h0 = _healthBps(price);
+    if (h0 >= policy.triggerBps)                 revert Refused_Healthy(h0, policy.triggerBps);
+    uint256 amount = _min(_needed(price), _min(policy.maxRepayPerEvent, reserve()));
+    if (amount == 0)                             revert Refused_NothingToRepay();
+
+    // 2. EFFECTS — tulis state SEBELUM panggil keluar
+    lastActedRound = roundId;
+
+    // 3. INTERACTIONS — panggilan eksternal paling akhir
+    dUSD.transferFrom(borrower, address(pool), amount);
+    pool.applyRepayment(borrower, amount);
+    emit Rescued(borrower, KIND_RESCUE, amount, h0, _healthBps(price), price, roundId, uint64(block.timestamp));
+}
+```
+
+`lastActedRound` ditulis **sebelum** transfer. Kalau dibalik, satu token dengan callback bisa masuk lagi sebelum penanda tertulis.
+
+### 9.4 Konstanta bernama, dengan alasan angkanya — bukan angka telanjang
+
+```solidity
+/// Ambang di mana siapa pun boleh menyita. 11000 bps = "pinjam 100, jaminan 110".
+uint16 public constant LIQUIDATION_BPS = 11_000;
+
+/// Batas policy borrower. Di bawah 12000 tidak menyisakan defence window;
+/// di atas 15000 agent bertindak terlalu sering dan membakar cadangan.
+uint16 public constant MIN_TRIGGER_BPS = 12_000;
+uint16 public constant MAX_TRIGGER_BPS = 15_000;
+```
+
+Pakai pemisah digit (`11_000`, bukan `11000`). Angka yang salah baca adalah bug yang paling mahal dan paling tidak kelihatan.
+
+### 9.5 `immutable` sebagai dokumentasi yang dipaksakan compiler
+
+```solidity
+address public immutable borrower;
+address public immutable agentExecutor;   // dari `kh wallet info` — tidak ada jalan menggantinya
+IERC20  public immutable dUSD;
+```
+
+Juri yang membaca `immutable agentExecutor` langsung tahu **tidak ada fungsi tersembunyi yang menggantinya** — dan compiler yang menjaminnya, bukan janji lo.
+
+Aturannya: kalau sebuah alamat di-set di constructor dan tidak ada alasan bisnis untuk mengubahnya, ia **wajib** `immutable`.
+
+### 9.6 View yang menjawab pertanyaan, bukan membocorkan storage
+
+```solidity
+// ❌ memaksa tiap pemanggil menghitung sendiri — dan menghitung beda
+function debt() external view returns (uint256);
+function collateralQty() external view returns (uint256);
+
+// ✅ satu sumber kebenaran, dipakai kontrak, agent, dan UI
+function healthRatioBps()      external view returns (uint16);
+function quoteGuardRepay()     external view returns (uint256);
+function amountToReachTarget() external view returns (uint256);
+```
+
+Setiap angka yang ditampilkan UI atau dipakai agent **harus punya view function-nya sendiri**. Kalau tiga lapisan menghitung rasio sendiri-sendiri, tiga lapisan itu akan menyimpang — dan penyimpangannya baru ketahuan saat demo.
+
+### 9.7 Math: satu helper, satu komentar yang menjelaskan pembulatannya
+
+```solidity
+/// @dev Half-up, mencocokkan pembulatan half-away-from-zero di agent dan UI.
+///      JANGAN pakai pembagian biasa: truncate menghasilkan 12666, bukan 12667,
+///      dan angka itu muncul identik di tiga implementasi — kesamaan itu argumennya.
+function _mulDivRound(uint256 a, uint256 b, uint256 d) internal pure returns (uint256) {
+    return (a * b + d / 2) / d;
+}
+```
+
+Nol pembagian mentah tersebar di kontrak.
+
+### 9.8 Test menulis skenario, dan gagal dengan nilai sebenarnya
+
+```solidity
+function test_refusesWhenHealthy() public {
+    _seedDemoPosition();                  // 10.000 @ 1.00, utang 6.000 -> 16667 bps
+    vm.prank(agentExecutor);
+    vm.expectRevert(abi.encodeWithSelector(
+        IDefralVault.Refused_Healthy.selector, 16667, 13000));
+    vault.guardRepay();
+}
+```
+
+**Satu helper seed dengan override**, supaya tiap test tinggal 3 baris:
+
+```solidity
+struct Seed { uint256 price; uint256 debt; uint256 reserve; bool couponSweep; }
+
+function _seedDemoPosition() internal { _seed(Seed(1e8, 6_000e6, 1_500e6, false)); }
+function _seed(Seed memory s) internal { ... }   // tiap test override yang relevan saja
+```
+
+Nama test = kalimat yang bisa dibaca stakeholder: `test_refusesWhenHealthy`, bukan `testGuardRepay3`. **Tiap `revert` wajib punya test-nya sendiri.**
+
+Plus satu test yang membuktikan tesisnya, bukan cuma perilakunya:
+
+```solidity
+/// Membuktikan PERMUKAAN otoritas agent, bukan perilakunya.
+/// Tiap fungsi non-view yang lolos onlyAgent harus ber-arity NOL.
+/// Kalau ada yang menerima address atau uint256, tesis kita bohong.
+function test_abiSurface() public view { ... }
+```
+
+### 9.9 Gejala agent lo menghasilkan kode buruk
+
+| Gejala | Perbaikan |
+|---|---|
+| Fungsi 80 baris yang "melakukan semuanya" | Pecah di batas checks / effects / interactions |
+| `require(cond)` tanpa pesan | Custom error dengan parameter |
+| Angka telanjang di tengah logic | Konstanta bernama + alasan angkanya |
+| Test cuma happy path | Tiap `revert` punya test sendiri |
+| Doc comment mengulang nama fungsi | Ganti: siapa boleh, kenapa, apa yang sengaja tidak bisa |
+| `public` padahal cukup `external`/`private` | Visibilitas paling sempit yang masih jalan |
+
+---
+
+## 10. 🔴 ATURAN DESAIN YANG MENGIKAT — turunan audit implementasi pendahulu
+
+Sepuluh aturan di bawah ini **bukan saran**. Semuanya turunan langsung dari audit baris-per-baris atas implementasi pendahulu, dan semuanya menutup satu baris di PRD §6. **Baca sebelum menulis satu baris Solidity.**
 
 
-Empat agent baca **setiap** file Cermin. Temuan yang **mengubah kontrak lo**. Baca ini sebelum nulis Solidity.
+Audit membaca **setiap** file implementasi pendahulu. Temuan yang **mengubah kontrak lo**. Baca ini sebelum nulis Solidity.
 
 ### K1. `LIQUIDATION_BPS = 11000` ADALAH "$110 lawan $100" milik tim, dalam basis points
 
@@ -623,7 +784,7 @@ function _mulDivRound(uint256 a, uint256 b, uint256 d) internal pure returns (ui
 }
 ```
 
-Angka demo **12667** muncul di 4 file Cermin + README + `Demo.daml:181` (`rescue.healthBefore === 12667`). Kalau meleset 1 bps, argumen *"tiga implementasi independen, satu angka"* mati. **Test harus assert `16667` dan `12667` persis.**
+Angka demo **12667** muncul di 4 file spesifikasi + README + `Demo.daml:181` (`rescue.healthBefore === 12667`). Kalau meleset 1 bps, argumen *"tiga implementasi independen, satu angka"* mati. **Test harus assert `16667` dan `12667` persis.**
 
 `amountToReachTarget` **truncate ke bawah** ke unit terkecil debt token — Daml juga gak membulatkannya.
 
@@ -639,11 +800,11 @@ Demo nunjukin **engine yang sama** melindungi dua-duanya. Satu panggilan `allowC
 
 ### K4. 🔴 Coupon harus DEGRADE jadi no-op, JANGAN PERNAH abort
 
-Bug Cermin: `payCoupon` dengan `couponRateBps = 0` menghitung `0.0`, melanggar `ensure amount > 0.0` (`Coupon.daml:42`) → **transaksi THROW**. Jalanin demo Cermin pakai emas → **hard failure di `Demo.daml:224`**, bukan no-op senyap.
+Bug di implementasi pendahulu: `payCoupon` dengan `couponRateBps = 0` menghitung `0.0`, melanggar `ensure amount > 0.0` (`Coupon.daml:42`) → **transaksi THROW**. Jalanin demo implementasi pendahulu pakai emas → **hard failure di `Demo.daml:224`**, bukan no-op senyap.
 
 Di EVM: collateral non-yield → `pendingCoupon` tetap 0 → `sweepCoupon()` revert `Refused_NoCouponDue()` **dan agent gak pernah manggilnya** karena `couponDue() == 0`. Loop agent jalan nol kali. **Itu degradasi yang Daml gak pernah punya.**
 
-### K5. 🔴 Cap `sweepCoupon` — Cermin TIDAK meng-cap-nya
+### K5. 🔴 Cap `sweepCoupon` — versi Daml TIDAK meng-cap-nya
 
 `SweepToLoan` (`Coupon.daml:73-108`) **uncapped, unthrottled, nol health assert**. Kalau kupon > outstanding, `ApplyRepayment` **REVERT** (`assertMsg "cannot repay more than outstanding"`) — lebih buruk dari cap.
 
@@ -655,7 +816,7 @@ Health gate tetap **sengaja tidak ada** — sweep itu paydown proaktif (`Coupon.
 
 ### K6. 🔴 `setPolicy` WAJIB ADA — ada 2 kontrol UI yang sekarang diam-diam gak ngapa-ngapain
 
-`GuardPolicy` Daml punya **nol choice** — immutable. Akibatnya dua kontrol UI yang sudah ter-ship di Cermin diam-diam tidak melakukan apa-apa: set-trigger no-op di live mode, dan toggle Coupon Sweep disembunyikan. **`setPolicy` menghidupkan dua-duanya** (PRD G7, req D3).
+`GuardPolicy` Daml punya **nol choice** — immutable. Akibatnya dua kontrol UI yang sudah ter-ship diam-diam tidak melakukan apa-apa: set-trigger no-op di live mode, dan toggle Coupon Sweep disembunyikan. **`setPolicy` menghidupkan dua-duanya** (PRD G7, req D3).
 
 `setPolicy` ~6 baris dan **menghidupkan dua-duanya**. Pertahankan `ensure` Daml sebagai `require()`:
 ```solidity
@@ -666,7 +827,7 @@ require(maxRepayPerEvent > 0);
 
 ### K7. 🔴 Likuidasi di-gate HEALTH sebagai PRIMARY, grace cuma penunda
 
-Bug Cermin: `LastResortDefault` **nol health check** — dia gak fetch PriceFeed sama sekali. Posisi sehat 16667 bps **bisa di-default** pakai `GracePeriod` kedaluwarsa mana pun. Dan `GracePeriod` nol choice + Daml nol auto-archive → **marker itu abadi**.
+Bug di implementasi pendahulu: `LastResortDefault` **nol health check** — dia gak fetch PriceFeed sama sekali. Posisi sehat 16667 bps **bisa di-default** pakai `GracePeriod` kedaluwarsa mana pun. Dan `GracePeriod` nol choice + Daml nol auto-archive → **marker itu abadi**.
 
 Lebih parah: `StartGracePeriod` **nonconsuming tanpa idempotency guard** → agent mencetak trigger default permanen baru **tiap poll tick** selama vault kosong.
 
@@ -680,11 +841,11 @@ function liquidate(address borrower) external {
 function _clearGrace(address b) internal;   // ◀ panggil saat health pulih
 ```
 
-### K8. Escrow BENERAN — `Lock` Cermin cuma disclosure
+### K8. Escrow BENERAN — `Lock` versi Daml cuma disclosure
 
 `Assets.daml:65-69` `Unlock` **satu-satunya assert-nya** `isSome lockedBy`. Nol loan di-fetch, nol saldo dicek, **`lockHolder` gak bisa protes**. **Borrower bisa unlock dan mentransfer collateral yang di-pledge kapan saja selagi loan hidup.**
 
-Jadi `Loan.collateralAmount` di Cermin **bisa gak di-back apa-apa**. Escrow ERC20 nyata di EVM **memperbaiki** ini — bukan mereproduksinya. Tulis di README: ini satu tempat lagi versi EVM lebih kuat.
+Jadi `Loan.collateralAmount` **bisa gak di-back apa-apa**. Escrow ERC20 nyata di EVM **memperbaiki** ini — bukan mereproduksinya. Tulis di README: ini satu tempat lagi versi EVM lebih kuat.
 
 ### K9. `maturity` mati total — hapus. `faceValue` → `collateralQty`
 
@@ -713,7 +874,7 @@ Zero-arg **itu tesisnya**. Non-custodial **keputusan tim**. Dua-duanya menang.
 
 ---
 
-## 10. Prompt awal buat Claude lo
+## 11. Prompt awal buat Claude lo
 
 ```
 Baca dua dokumen ini lengkap, urut:
@@ -729,7 +890,7 @@ bukan perasaan "kayaknya udah jalan".
 Mulai dari TASK 0 (plan §2). JANGAN tulis DefralVault sebelum interface-nya beku dan stub-nya
 ter-deploy — islakun dan bima nunggu ABI itu, dan itu blocker CP3 di PRD §14.
 
-Baca plan §9 (ATURAN DESAIN YANG MENGIKAT) SEBELUM nulis satu baris Solidity. Sepuluh aturan
+Baca plan §10 (ATURAN DESAIN YANG MENGIKAT) SEBELUM nulis satu baris Solidity. Sepuluh aturan
 di situ turunan audit baris-per-baris, dan melanggarnya berarti mengulang bug yang sudah ketemu.
 
 Aturan keras:

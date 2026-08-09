@@ -29,7 +29,7 @@ PRD (`../PRD-defral.md`) menjawab **APA** dan **KENAPA**. Dokumen ini menjawab *
 
 > **Kalau keduanya bertentangan:** `plan.md` menang untuk **signature dan endpoint**; PRD menang untuk **perilaku dan batasan**. Kalau lo nemu pertentangan, lapor ke grup — bukan pilih sendiri.
 
-Tiap requirement di bawah punya acceptance criteria di **PRD §10**. Kolom **Gap** menunjuk ke temuan audit Cermin di **PRD §6** yang requirement itu tutup.
+Tiap requirement di bawah punya acceptance criteria di **PRD §10**. Kolom **Gap** menunjuk ke temuan audit implementasi pendahulu di **PRD §6** yang requirement itu tutup.
 
 | Req | Yang harus benar | Gap | Di plan ini |
 |---|---|---|---|
@@ -185,7 +185,7 @@ npm run dev                      # → localhost:5173
 
 **Seri commit lo: 08-10 → 08-12. JANGAN DI-SQUASH.**
 
-> 🔴 **Kenapa commit hygiene penting di sini.** Defral berakar pada Cermin-RWA, project Canton yang tim ini kirim ke Build on Canton (Encode Club) bulan Juli. Repo itu punya **3 commit, semuanya 2026-07-20 — nol di dalam window hackathon ini.**
+> 🔴 **Kenapa commit hygiene penting di sini.** Defral berakar pada project Canton yang tim ini kirim ke hackathon sebelumnya bulan Juli. Repo itu punya **3 commit, semuanya 2026-07-20 — nol di dalam window hackathon ini.**
 >
 > Aturan DoraHacks **mengizinkan** reuse — sudah diverifikasi, nol klausa originality di ToS maupun di aturan KeeperHub, dan halaman Prizes malah bilang *"top three can come from anywhere, including the same topic area"*.
 >
@@ -197,7 +197,7 @@ Ini bukan soal gaya penulisan. Ini soal **satu-satunya cara paling cepat kehilan
 
 ### 3.1 Klaim privasi: DILARANG, tanpa pengecualian
 
-Produk pendahulu kami — Cermin-RWA di Canton — punya privasi party-scoped yang **nyata**: reserve borrower dan tiap rescue secara struktural tidak terlihat oleh lending pool. README-nya menulis *"impossible to replicate on a public EVM chain."*
+Produk pendahulu kami di Canton punya privasi party-scoped yang **nyata**: reserve borrower dan tiap rescue secara struktural tidak terlihat oleh lending pool. README-nya menulis *"impossible to replicate on a public EVM chain."*
 
 **Kalimat itu benar, dan justru karena benar ia tidak ikut pindah.** Di Base Sepolia setiap storage slot dan setiap event log terbaca dunia.
 
@@ -298,7 +298,7 @@ Intinya: apa yang dibawa dari build Canton · apa yang ditulis baru minggu ini �
 
 Plus section **"Apa yang nyata vs apa yang mock"**.
 
-> 🔴 **Deskripsi GitHub harus ditulis ulang memimpin dengan KeeperHub.** Repo lama masih masarin "Build on Canton Hackathon (Encode Club)" di tagline-nya sendiri.
+> 🔴 **Deskripsi GitHub repo ini masih kosong.** Isi dengan satu baris yang memimpin dengan KeeperHub — itu yang muncul di hasil pencarian dan hal pertama yang dibaca reviewer.
 
 ---
 
@@ -375,7 +375,219 @@ Capability Matrix melawan **data nyata**, tiap sel bawa `transactionLink` · Rec
 
 ---
 
-## 8. 🔴 ATURAN DESAIN YANG MENGIKAT — turunan audit Cermin
+## 8. STANDAR REKAYASA — cara nulis kode yang bertahan dibaca juri
+
+Juri menilai *"kualitas kode & dokumentasi"* sebagai **1 dari 4 kriteria**, dan lo menyetir Claude agent — agent akan dengan senang hati menghasilkan kode yang jalan tapi tidak bisa dipertahankan, kecuali lo mengikatnya.
+
+**Aturan buat agent lo:** kalau ia menghasilkan sesuatu yang melanggar standar di bawah, tolak dan minta ulang. Jangan "nanti dirapikan" — tidak akan sempat.
+
+### 8.1 Math di `lib/`, murni, dengan doc comment yang menjelaskan persamaannya
+
+```ts
+/**
+ * Health Ratio, mengikuti semantik yang sama dengan kontrak.
+ *
+ * Health Ratio = collateralValue / debt, dibawa sebagai Int basis points
+ * (13000 = 130%). Uang tetap number, dibulatkan ke sen, sama seperti kontrak.
+ *
+ * Fungsi-fungsi ini MURNI dengan sengaja: store adalah pembungkus tipis yang
+ * memanggil modul ini dan menulis hasilnya balik ke state. Menjaga math tetap
+ * murni membuatnya bisa dites langsung terhadap angka demo, tanpa menyentuh
+ * React maupun store.
+ */
+export const BPS_SCALE = 10_000;
+```
+
+Kalimat *"murni dengan sengaja, karena…"* itu yang bikin orang berikutnya tidak memindahkan math ke dalam komponen.
+
+Tiap fungsi turunan menyebut **hubungannya dengan yang lain**:
+
+```ts
+/**
+ * Utang terbesar yang masih menjaga Health Ratio di/atas `ratioBps` —
+ * kebalikan dari computeHealthRatioBps, dipakai membatasi slider Borrow.
+ * Dibulatkan ke BAWAH ke sen supaya rasio hasilnya tidak pernah jatuh
+ * di bawah batas.
+ */
+export function maxOutstandingForRatioBps(collateralValue: number, ratioBps: number): number
+```
+
+Perhatikan `floor` vs `round` **dipilih dan dijelaskan**. Pembulatan yang salah arah di UI keuangan adalah bug yang tidak pernah dilaporkan siapa pun, cuma bikin orang tidak percaya.
+
+### 8.2 Union type untuk state, bukan boolean
+
+```ts
+// ✅ tiga keadaan, eksplisit, exhaustive-checkable
+export type HealthStatus = 'protected' | 'guarded' | 'action';
+
+// ❌ dua boolean = empat kombinasi, dua di antaranya mustahil
+{ isHealthy: boolean; isCritical: boolean }
+```
+
+### 8.3 Copy sebagai data, di satu tempat
+
+```ts
+/** Kata status persis sesuai spesifikasi produk — jangan diganti. */
+export const STATUS_LABEL: Record<HealthStatus, string> = {
+  protected: 'Terlindungi',
+  guarded:   'Dijaga',
+  action:    'Perlu tindakan',
+};
+```
+
+String yang menghadap user tinggal di satu objek, bukan tersebar di JSX. Ia jadi bisa di-test, bisa di-review sekali jalan, dan tidak menyimpang antar layar.
+
+### 8.4 Peta lookup, bukan ternary di JSX
+
+```ts
+// ✅ tiga peta di module scope — style per state, terbaca sekali pandang
+const STATUS_STROKE: Record<HealthStatus, string> = {
+  protected: 'var(--color-sage)', guarded: 'var(--color-amber)', action: 'var(--color-terracotta)',
+};
+const STATUS_TEXT_CLASS: Record<HealthStatus, string> = { ... };
+const STATUS_DOT_CLASS:  Record<HealthStatus, string> = { ... };
+
+// dipakai: stroke={STATUS_STROKE[status]}
+
+// ❌ ternary bersarang di dalam markup
+className={status === 'protected' ? 'text-sage' : status === 'guarded' ? 'text-amber' : 'text-terracotta'}
+```
+
+Kalau nanti ada state keempat, TypeScript **memaksa** lo melengkapi ketiga peta. Ternary tidak.
+
+### 8.5 Angka ajaib visual pun punya nama dan alasan
+
+```ts
+// 200% digambar sebagai cincin penuh — ini menjaga gauge tetap tenang dan
+// terbaca di seluruh rentang demo (126%–166%), bukan terlihat kosong atau mentok.
+const VISUAL_CAP_BPS = 20_000;
+```
+
+Bukan cuma `const CAP = 20000`. **Alasannya yang bernilai** — orang berikutnya yang tergoda mengubahnya jadi tahu apa yang rusak.
+
+### 8.6 Komponen menerima data, bukan mengambilnya
+
+```tsx
+interface HealthRingProps {
+  healthRatioBps: number;
+  triggerRatioBps: number;
+  status: HealthStatus;
+  size?: number;
+}
+
+/**
+ * Elemen utama seluruh app: satu angka menguasai layar.
+ * Cincin yang tenang — bukan gauge yang berteriak — dengan tanda kecil di
+ * Guard Trigger supaya titik pemicunya terbaca tanpa terasa mengancam.
+ */
+export function HealthRing({ healthRatioBps, triggerRatioBps, status, size = 260 }: HealthRingProps) {
+```
+
+Doc comment menyatakan **peran komponen dalam produk**, bukan mengulang nama fungsi. Fetching tinggal di store dan satu modul client. Itu juga yang membuat lo bisa membangun seluruh UI dengan fixture **sebelum** kontraknya ada — dan Senin, itulah situasinya.
+
+### 8.7 Defensif terhadap nilai yang mustahil dirender
+
+```ts
+// health ratio bisa Infinity (utang nol). SVG tidak bisa merender Infinity.
+const safeBps  = Number.isFinite(healthRatioBps) ? healthRatioBps : VISUAL_CAP_BPS;
+const fraction = Math.max(0, Math.min(1, safeBps / VISUAL_CAP_BPS));
+```
+
+Fungsi murni lo **memang** mengembalikan `Infinity` untuk utang nol — itu benar secara matematis. Lapisan render yang wajib menanganinya. Clamp tiap nilai yang masuk ke geometri.
+
+### 8.8 Geometri dihitung sekali di atas, bukan inline di markup
+
+```tsx
+const strokeWidth   = 14;
+const radius        = (size - strokeWidth) / 2;
+const circumference = 2 * Math.PI * radius;
+const center        = size / 2;
+```
+
+Markup jadi terbaca sebagai struktur, bukan sebagai kalkulator.
+
+### 8.9 Token warna, dan `tabular-nums` untuk angka yang berubah
+
+```tsx
+stroke="var(--color-sage)"                       // ✅ token, bukan #7A9B76
+<span className="text-5xl tabular-nums">          // ✅ angka tidak bergoyang saat berubah
+```
+
+`tabular-nums` penting khusus di produk ini: Health Ratio berubah **saat direkam video**. Tanpa itu, angkanya bergeser tiap render dan terlihat murah.
+
+### 8.10 Komentar di JSX untuk elemen yang niatnya tidak kelihatan
+
+```tsx
+{/* Tanda Guard Trigger — penanda referensi yang tenang, bukan alarm. */}
+<div className="pointer-events-none absolute inset-0" style={{ transform: ... }}>
+```
+
+### 8.11 Tiap klaim di layar punya sumber
+
+```tsx
+// ❌ angka yang tidak jelas datang dari mana
+<Stat label="Coupon rate" value="4.50%" />
+
+// ✅ datang dari kontrak, atau tidak ditampilkan sama sekali
+<Stat label="Coupon rate" value={fmtBps(position.couponRateBps)} />
+```
+
+Kalau sebuah field tidak bisa dilacak balik ke pembacaan kontrak, **jangan tampilkan**. Field yang tidak pernah terisi lalu me-render nilai seed adalah cara UI berbohong tanpa ada yang berniat bohong.
+
+Dan tiap baris Capability Matrix wajib punya `transactionLink` nyata **atau** pernyataan eksplisit bahwa fungsinya tidak ada.
+
+### 8.12 Copy adalah kode. Test-kan.
+
+```ts
+test("nol istilah terlarang muncul di render", () => {
+  const banned = ['private', 'hidden', 'invisible', 'encrypted', 'shadow'];
+});
+test("tiap string suara Defral first-person", () => { /* diawali "Saya " */ });
+```
+
+String yang salah merusak submission lebih cepat daripada bug.
+
+### 8.13 Deterministik: nol `Math.random()`, nol `new Date()` saat render
+
+```ts
+export function rng(seed: number): () => number    // ✅ seeded
+```
+
+Lo akan merekam video **dua kali**. Kalau posisi dot halftone atau burst berubah tiap render, take kedua tidak cocok dengan take pertama.
+
+### 8.14 Empat state per layar — semuanya dirancang
+
+| State | Yang ditampilkan |
+|---|---|
+| Loading | skeleton, bukan spinner kosong |
+| Empty | apa yang harus dilakukan user berikutnya |
+| Error | apa yang gagal dan apa yang bisa dicoba |
+| Sukses | datanya |
+
+Juri membuka UI dalam keadaan yang tidak lo antisipasi. Empty state yang dirancang terlihat seperti produk; layar putih terlihat seperti bug.
+
+### 8.15 Parachute mode wajib jalan
+
+`npm run dev` tanpa env backend **harus** menceritakan seluruh cerita dengan data mock. Penjurian berlangsung berhari-hari setelah demo; kalau backend mati saat juri membuka link, mode mock yang menyelamatkan submission.
+
+Konsekuensi untuk kode: **tiap pembacaan data punya sumber mock yang setara**, dan modenya dipilih di **satu** tempat, bukan dicek di 20 komponen.
+
+### 8.16 Gejala agent lo menghasilkan kode buruk
+
+| Gejala | Perbaikan |
+|---|---|
+| Math di dalam JSX | Pindah ke `lib/`, kasih test |
+| Ternary bersarang untuk style per-state | Peta `Record<Union, string>` |
+| Komponen `fetch` sendiri | Angkat ke store |
+| Angka ajaib di style | Konstanta bernama + alasannya |
+| Warna hardcoded `#7A9B76` | Token CSS var |
+| String klaim tanpa test | Test-kan (§8.12) |
+| `useEffect` tanpa cleanup | Tambahkan, atau jangan pakai effect |
+| Empty state = layar putih | Rancang keempat state |
+
+---
+
+## 9. 🔴 ATURAN DESAIN YANG MENGIKAT — turunan audit implementasi pendahulu
 
 Tujuh aturan di bawah ini **bukan saran**. **K1 adalah pole terpanjang di frontend dan tidak ada yang menyangkanya — baca duluan.**
 
@@ -416,7 +628,7 @@ Plus satu baris jujur: **Base Sepolia itu publik.**
 
 ### K4. 🔴 `setGuardTrigger` dan toggle Coupon Sweep — HIDUPKAN LAGI
 
-Di Cermin, `GuardPolicy` **immutable** (nol choice), jadi dua kontrol yang sudah ter-ship diam-diam tidak melakukan apa-apa: `setGuardTrigger` no-op di live mode, dan toggle Coupon Sweep disembunyikan.
+Di implementasi pendahulu, `GuardPolicy` **immutable** (nol choice), jadi dua kontrol yang sudah ter-ship diam-diam tidak melakukan apa-apa: `setGuardTrigger` no-op di live mode, dan toggle Coupon Sweep disembunyikan.
 
 Kontrak EVM punya **`setPolicy()`**. **Dua kontrol yang sudah ter-ship dan terlihat itu jadi hidup.** Buang cabang no-op, buang kondisi yang nyembunyiin.
 
@@ -432,13 +644,13 @@ Ganti di semua copy. Yang dibangun mengecilkan penyebut dan tidak pernah menyent
 
 ### K7. Field yang gak akan pernah keisi — hapus dari UI
 
-Di Cermin, `CollateralState` punya field `couponRateBps` dan `maturity` yang **tidak pernah diisi dari backend** — live mode me-render seed mock (450bps, 2030) **seolah-olah itu state ledger, selamanya.** Jangan ulangi: setiap field yang ditampilkan harus datang dari kontrak, atau tidak usah ditampilkan.
+Di implementasi pendahulu, `CollateralState` punya field `couponRateBps` dan `maturity` yang **tidak pernah diisi dari backend** — live mode me-render seed mock (450bps, 2030) **seolah-olah itu state ledger, selamanya.** Jangan ulangi: setiap field yang ditampilkan harus datang dari kontrak, atau tidak usah ditampilkan.
 
 `maturity` juga **dead field di Daml** — di-set 4 tempat, dibaca nol choice. **Hapus dari UI**, atau ambil beneran dari kontrak.
 
 ---
 
-## 9. Prompt awal buat Claude lo
+## 10. Prompt awal buat Claude lo
 
 ```
 Baca dua dokumen ini lengkap, urut:
@@ -454,7 +666,7 @@ Urutan kerja:
   3. plan §4.1 — Capability Matrix pakai fixture. Ini komponen paling penting di UI.
   4. plan §5 — video. Ini deliverable terpenting lo, dan shot list-nya sudah lengkap.
 
-Baca plan §8 (ATURAN DESAIN YANG MENGIKAT).
+Baca plan §9 (ATURAN DESAIN YANG MENGIKAT).
 
 Aturan keras:
 - Nol string terlarang §3.1 di seluruh UI. Tulis test yang menegakkannya.
