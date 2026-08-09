@@ -1,0 +1,600 @@
+# SC — Plan Smart Contract (alven)
+
+**Defral · KeeperHub Agents Onchain Hackathon · deadline 2026-08-13 17:00 WIB**
+**Chain: Base Sepolia `84532` · Foundry · Solidity ^0.8.24**
+
+> Dokumen ini ditulis supaya bisa dieksekusi langsung bareng Claude. Tiap task punya acceptance criteria yang bisa dicek. Kalau agent lo nanya "ini maunya gimana", jawabannya ada di sini.
+
+---
+
+## 0. Kenapa kontrak ini ada
+
+Agent otonom yang mindahin duit punya satu masalah universal: **kalau kunci agent bocor, apa yang bisa dia lakukan?**
+
+Lapangan hackathon ini (14 tim liquidation guardian) jawab "apa aja" — agent pegang `approve(bot, MAX)` dan ngitung keputusan off-chain, jadi **agent itu sendiri satu-satunya pemeriksa keselamatan**.
+
+**Defral mindahin pemeriksaan ke dalam callee.** KeeperHub Turnkey EOA cuma punya **dua fungsi zero-argument**, dan dua-duanya baca ulang oracle + posisi lalu **revert kalau posisi sehat**.
+
+> **Kalimat yang harus benar setelah lo selesai:**
+> *"Tidak ada satu pun fungsi `onlyAgent` di `DefralVault` yang menerima parameter `address` atau `uint256`. Vault tidak pernah memegang dana reserve. Juri memverifikasinya dengan satu grep."*
+
+Kalau ada perubahan desain yang bikin kalimat itu jadi salah — **jangan lakukan**, atau umumkan di grup dulu.
+
+---
+
+## 1. Keputusan yang sudah dikunci
+
+| # | Keputusan | Kenapa |
+|---|---|---|
+| D1 | **Non-custodial.** Vault **tidak pernah** memegang dUSD reserve | Reserve = `min(dUSD.balanceOf(borrower), dUSD.allowance(borrower, vault))`. Nol `topUp()`, nol `withdraw()` |
+| D2 | **Satu vault per borrower**, di-deploy `DefralVaultFactory` | Vault gak nyimpen apa-apa → deploy per-borrower murah. Ini yang bikin `guardRepay()` **zero-argument**, dan zero-arg yang bikin `check-and-execute` bisa dipakai |
+| D3 | **Collateral DI-ESCROW** di `MockLendingPool` | Itu memang arti pledge. Beda dengan reserve — dan bedanya adalah cerita produknya |
+| D4 | Defence = **REPAY**, bukan top-up collateral | Verifikasi kode Cermin: `TopUpCollateral` controller-nya **borrower**, agent gak bisa manggil. Dan `/api/execute/swap` KeeperHub adalah **stub 501** |
+| D5 | **`liquidate()` ADA dan bisa dipanggil siapa pun** | Cermin versi Canton **tidak pernah** menyita collateral (`LastResortDefault` badannya `pure ()`). Di EVM kita bisa, dan itu bikin taruhannya bisa diklik |
+| D6 | Oracle **berbentuk `AggregatorV3Interface`** | `roundId` monoton = penerus EVM dari consuming choice Canton. Jalur mainnet nanti = ganti satu alamat |
+
+---
+
+## 2. 🔴 TASK 0 — 3 JAM PERTAMA. Ini nge-gate seluruh tim.
+
+islakun dan bima **tidak bisa mulai integrasi nyata** sampai lo selesai task ini. Kerjakan **berurutan**, jangan diacak.
+
+### 0.1 Akses KeeperHub (20 menit)
+```bash
+# signup app.keeperhub.com, verifikasi email (Turnkey wallet auto-provisioned)
+# Settings -> API Keys -> tab ORGANISATION -> Create New Key
+# 🔴 SALIN kh_... SEKARANG — cuma ditampilkan sekali
+
+curl -sf -H "Authorization: Bearer kh_..." https://app.keeperhub.com/api/keys
+
+brew install keeperhub/tap/kh   # atau: go install github.com/keeperhub/cli/cmd/kh@latest
+kh auth login
+kh wallet info --json           # 🔴 CATAT alamat EOA enclave — ini jadi immutable agentExecutor
+```
+
+### 0.2 Deploy `Probe.sol` (15 menit)
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Probe {
+    uint256 public v;
+    address public lastCaller;
+    function value() external view returns (uint256) { return v; }
+    function bump() external { v++; lastCaller = msg.sender; }
+    function boom() external pure { revert("PROBE: boom"); }
+}
+```
+
+### 0.3 🔴 PROBE 1 — `msg.sender` di bawah gas sponsorship (15 menit)
+
+**Ini nge-gate SELURUH tesis.** Kalau relayer sponsorship yang sampai ke kontrak, `require(msg.sender == agentExecutor)` runtuh.
+
+```bash
+curl -s -X POST https://app.keeperhub.com/api/execute/contract-call \
+  -H "Authorization: Bearer kh_..." -H "Content-Type: application/json" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -d '{"chainId":84532,"contractAddress":"<PROBE>","functionName":"bump",
+       "functionArgs":"[]","abi":"[{\"inputs\":[],\"name\":\"bump\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]"}' | jq
+
+# poll status, lalu baca lastCaller dari chain via cast
+cast call <PROBE> "lastCaller()(address)" --rpc-url https://sepolia.base.org
+```
+
+| Hasil | Aksi |
+|---|---|
+| `lastCaller` == EOA enclave | ✅ Lanjut sesuai rencana |
+| `lastCaller` == alamat lain (relayer) | 🔴 **Rewrite hari ini juga.** Ganti jadi allowlist yang nerima relayer, dan **turunkan klaim di README secara terbuka** |
+
+**Simpan `transactionLink` → ini TX-0. Gate kriteria 1 pensiun di jam pertama.**
+
+### 0.4 🔴 PROBE 2 — apakah KeeperHub mem-broadcast tx yang bakal revert (15 menit)
+```bash
+# panggil boom() dengan simulate:false
+# 🔴 CEK: response punya transactionHash?
+```
+Kalau **tidak** → 6 dari 7 tx demo lenyap, negative control runtuh jadi "percaya log kami". Lapor ke grup **sekarang**, jangan nanti.
+
+### 0.5 PROBE 3 — `check-and-execute` pada view zero-arg (15 menit)
+```bash
+curl -s -X POST https://app.keeperhub.com/api/execute/check-and-execute \
+  -H "Authorization: Bearer kh_..." -H "Content-Type: application/json" \
+  -d '{"chainId":84532,"contractAddress":"<PROBE>","functionName":"value",
+       "condition":{"operator":"gte","value":"0"},
+       "action":{"contractAddress":"<PROBE>","functionName":"bump","functionArgs":"[]"}}' | jq
+```
+Gagal → fallback `contract-call`. **Downgrade, bukan kill.**
+
+### 0.6 PROBE 4 — repro issue #1840 (15 menit)
+Kirim `boom()` **2×** dengan `Idempotency-Key` identik. Tangkap `"idempotentReplay": true` di **body** response. **Simpan seluruh JSON — ini isi PR bounty.**
+
+### 0.7 🔴🔴 FREEZE ABI + DEPLOY STUB (40 menit) — LANGKAH PALING PENTING
+
+**Tulis `SC/src/interfaces/IDefralVault.sol` (§3), publish, deploy stub, serahkan alamat + ABI ke grup.**
+
+Stub = signature lengkap, body trivial:
+```solidity
+function guardRepay() external { emit Rescued(borrower, 1, 0, 0, 0, 0, 0, uint64(block.timestamp)); }
+function healthRatioBps() external pure returns (uint16) { return 16667; }
+```
+
+> **Setelah ini, nol orang di tim yang nganggur.** islakun bangun `KeeperHubLedger` ke ABI nyata, bima render ke alamat nyata. Lo isi logikanya sambil jalan.
+>
+> **Signature TIDAK BOLEH berubah setelah menit ini.** Kalau kepaksa, umumkan di grup **sebelum** commit.
+
+**Post ke grup:**
+```
+✅ TX-0: <transactionLink>
+✅ EOA enclave: 0x...
+✅ PROBE 1: lastCaller == enclave? YA/TIDAK
+✅ PROBE 2: revert tx punya hash? YA/TIDAK
+✅ PROBE 3: check-and-execute zero-arg? YA/TIDAK
+✅ PROBE 4: #1840 nyata? YA/TIDAK
+🔒 ABI BEKU: SC/src/interfaces/IDefralVault.sol
+📍 STUB: DefralVault=0x... Factory=0x... dUSD=0x... dUST=0x... Oracle=0x... Pool=0x...
+```
+
+---
+
+## 3. Interface beku — `SC/src/interfaces/IDefralVault.sol`
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+/// @notice SATU VAULT PER BORROWER. Vault ini TIDAK PERNAH memegang dana reserve.
+///         Reserve = min(dUSD.balanceOf(borrower), dUSD.allowance(borrower, vault)).
+///         Karena itu tidak ada topUp() dan tidak ada withdraw(): kami tidak pernah memegangnya.
+interface IDefralVault {
+    // ───────── struct ─────────
+    struct Position {
+        address borrower;
+        uint256 outstanding;       // utang dUSD, 6 desimal
+        uint256 collateralAmount;  // dUST di-escrow di pool, 18 desimal
+        uint16  triggerBps;        // 13000
+        uint16  targetBps;         // 14500
+        uint256 maxRepayPerEvent;  // 2000e6
+        bool    couponSweep;
+        uint256 reserve;           // min(balanceOf, allowance) — TIDAK dipegang vault
+        uint80  lastActedRound;
+        bool    revoked;
+    }
+
+    // ───────── error (satu per alasan penolakan) ─────────
+    error Refused_Healthy(uint16 healthBps, uint16 triggerBps);
+    error Refused_StaleOracle(uint256 updatedAt, uint256 maxStale);
+    error Refused_AlreadyActed(uint80 roundId);
+    error Refused_NothingToRepay();
+    error Refused_NoReserve(uint256 available);
+    error Refused_CouponSweepOff();
+    error Refused_NoCouponDue();
+    error Refused_AgentRevoked();
+    error NotAgent(address caller);
+    error NotBorrower(address caller);
+
+    // ───────── event ─────────
+    /// @param kind 1 = RESCUE, 2 = COUPON.  uint8 ber-enum, JANGAN PERNAH free text.
+    event Rescued(
+        address indexed borrower,
+        uint8   indexed kind,
+        uint256 amount,
+        uint16  healthBefore,
+        uint16  healthAfter,
+        int256  price,
+        uint80  roundId,
+        uint64  at
+    );
+    event PolicySet(uint16 triggerBps, uint16 targetBps, uint256 maxRepayPerEvent, bool couponSweep);
+    event AgentRevoked();
+
+    // ───────── view — siapa pun ─────────
+    function healthRatioBps()      external view returns (uint16);   // ZERO-ARG. Untuk check-and-execute.
+    function reserve()             external view returns (uint256);  // min(balanceOf, allowance)
+    function quoteGuardRepay()     external view returns (uint256);
+    function amountToReachTarget() external view returns (uint256);
+    function couponDue()           external view returns (uint256);
+    function getPosition()         external view returns (Position memory);
+    function agentExecutor()       external view returns (address);
+    function borrower()            external view returns (address);
+
+    // ───────── onlyBorrower ─────────
+    function setPolicy(uint16 triggerBps, uint16 targetBps, uint256 maxRepayPerEvent, bool couponSweep) external;
+    function revokeAgent() external;   // KILL SWITCH
+
+    // ───────── onlyAgent — DUA FUNGSI. ITU SAJA. KEDUANYA ZERO-ARGUMENT. ─────────
+    function guardRepay()  external;
+    function sweepCoupon() external;
+}
+```
+
+> **Aturan yang tidak boleh dilanggar:** nol fungsi `onlyAgent` yang menerima `address` atau `uint256`. Nol proxy. Nol `delegatecall`. Nol upgrade path. Nol `owner`. Nol fungsi yang bisa mengirim token ke alamat sembarang.
+
+---
+
+## 4. Kontrak yang harus ditulis
+
+### 4.1 `DefralVault.sol` (~220 baris) — bintangnya
+
+```solidity
+contract DefralVault is IDefralVault {
+    address public immutable borrower;
+    address public immutable agentExecutor;   // dari `kh wallet info`
+    IERC20  public immutable dUSD;
+    IERC20  public immutable dUST;
+    AggregatorV3Interface public immutable oracle;
+    IDefralPool public immutable pool;
+
+    uint256 public constant MAX_STALE = 1 hours;
+
+    Policy  public policy;
+    uint80  public lastActedRound;
+    bool    public revoked;
+    uint256 public couponAccrued;
+
+    modifier onlyAgent()    { if (msg.sender != agentExecutor) revert NotAgent(msg.sender);
+                              if (revoked) revert Refused_AgentRevoked(); _; }
+    modifier onlyBorrower() { if (msg.sender != borrower) revert NotBorrower(msg.sender); _; }
+```
+
+**`healthRatioBps()` — transkripsi verbatim dari `Credit.daml:15-17`:**
+```
+healthRatioBps = round(collateralAmount * price * 10000 / outstanding)
+```
+⚠️ Daml pakai `round` (half away from zero), Solidity integer division **truncate**. Tambahkan `+ denom/2` sebelum bagi biar cocok dengan angka demo. **Test-nya harus meng-assert 16667 dan 12667 persis.**
+
+**`amountToReachTarget()` — dari `Credit.daml:23-25`:**
+```
+needed = outstanding - (collateralAmount * price * 10000 / targetBps)
+```
+
+**`guardRepay()` — transkripsi `Guard.daml:116-159`, satu `require` untuk satu `assertMsg`:**
+```solidity
+function guardRepay() external onlyAgent {
+    (uint80 roundId, int256 price,, uint256 updatedAt,) = oracle.latestRoundData();
+
+    if (updatedAt + MAX_STALE < block.timestamp) revert Refused_StaleOracle(updatedAt, MAX_STALE);
+    if (roundId == lastActedRound)               revert Refused_AlreadyActed(roundId);
+
+    uint16 h0 = _healthBps(price);
+    if (h0 >= policy.triggerBps) revert Refused_Healthy(h0, policy.triggerBps);   // ◀ THE GATE
+
+    uint256 avail  = reserve();
+    if (avail == 0) revert Refused_NoReserve(0);
+
+    uint256 needed = _amountToTarget(price);
+    uint256 amount = _min(needed, _min(policy.maxRepayPerEvent, avail));
+    if (amount == 0) revert Refused_NothingToRepay();
+
+    lastActedRound = roundId;                                   // effects SEBELUM interactions
+    dUSD.transferFrom(borrower, address(pool), amount);         // non-custodial: dari wallet borrower
+    pool.applyRepayment(borrower, amount);
+
+    uint16 h1 = _healthBps(price);
+    emit Rescued(borrower, 1, amount, h0, h1, price, roundId, uint64(block.timestamp));
+}
+```
+
+**`sweepCoupon()` — dari `Coupon.daml:73-108`. ⚠️ SENGAJA NOL health gate** — komentar Daml-nya eksplisit: *"sweeping a coupon is a proactive paydown, not a breach response"*. Cuma cek `policy.couponSweep` dan `couponDue() > 0`.
+
+**`reserve()` — inti non-custodial:**
+```solidity
+function reserve() public view returns (uint256) {
+    uint256 bal = dUSD.balanceOf(borrower);
+    uint256 all = dUSD.allowance(borrower, address(this));
+    return bal < all ? bal : all;
+}
+```
+
+### 4.2 `DefralVaultFactory.sol` (~50 baris)
+`deployVault(address borrower, ...)` → vault baru. Simpan `mapping(address => address) vaultOf`. **Ini yang memungkinkan `guardRepay()` zero-argument.**
+
+### 4.3 `NavOracle.sol` (~60 baris) — berbentuk AggregatorV3
+```solidity
+function setPrice(int256 newPrice) external onlyPublisher {
+    roundId++;                                    // ◀ MONOTON — penerus consuming choice Canton
+    answer = newPrice; updatedAt = block.timestamp;
+    emit AnswerUpdated(newPrice, roundId, block.timestamp);
+}
+function latestRoundData() external view
+    returns (uint80, int256, uint256, uint256, uint80);
+```
+⚠️ **Kunci `publisher` HARUS terpisah dari `agentExecutor`.** Ini yang bikin demo bukan self-dealt.
+
+### 4.4 `MockLendingPool.sol` (~120 baris) — 🔴 ADA `liquidate()`
+
+Ini nutup lubang yang ketahuan dari audit Cermin: versi Canton **tidak pernah menyita apa pun** (`LastResortDefault` badannya `pure ()`).
+
+```solidity
+uint16 public constant LIQUIDATION_THRESHOLD = 11000;  // 110%
+uint16 public constant LIQUIDATION_BONUS     = 500;    // 5% diskon buat liquidator
+
+function openPosition(address borrower, uint256 collateralAmt, uint256 principal, ...) external;
+function applyRepayment(address borrower, uint256 amount) external onlyAuthorizedRepayer;
+function registerRepayer(address vault) external onlyOwner;   // pengganti EVM dari
+                                                              // propagasi otoritas Daml
+
+/// @notice SIAPA PUN bisa panggil. Ini yang ditunjukkan demo pada posisi yang TIDAK dijaga.
+function liquidate(address borrower) external {
+    uint16 h = healthRatioBps(borrower);
+    if (h >= LIQUIDATION_THRESHOLD) revert NotLiquidatable(h);
+    uint256 seized = /* collateral + bonus */;
+    dUST.transfer(msg.sender, seized);            // ◀ collateral BENAR-BENAR pindah
+    emit Liquidated(borrower, seized, h);
+}
+```
+
+> **`registerRepayer` adalah pengganti EVM dari `Credit.daml:38-43`.** Di Daml, `ApplyRepayment` membawa otoritas pool karena borrower+pool ko-menandatangani `Loan` — *"the pool consented once."* Di EVM nol propagasi otoritas, jadi pool harus **meng-allowlist vault secara eksplisit**. Tulis ini di README: fidelitasnya **WEAKER**, dan kita bilang begitu.
+
+### 4.5 `MockUSD.sol` + `MockTreasury.sol` (~90 baris)
+`dUSD` 6 desimal, `dUST` 18 desimal. **`mint()` publik** — jangan bergantung rate limit faucet Circle.
+
+---
+
+## 5. Foundry test — `SC/test/`
+
+Terjemahkan skenario dari logic Daml aslinya. **Lo tidak butuh folder Cermin** — inilah tiga potong logic yang harus ditranskripsi, disalin verbatim dari sumbernya:
+
+```haskell
+-- Credit.daml:15-17 — formula health ratio KANONIK. round = half away from zero.
+healthRatioBps collateralAmount price outstanding =
+  round (collateralAmount * price * 10000.0 / outstanding)
+
+-- Credit.daml:23-25 — berapa yang harus dibayar buat balik ke target
+amountToReachTarget collateralAmount price outstanding targetBps =
+  outstanding - (collateralAmount * price * 10000.0 / intToDecimal targetBps)
+
+-- Coupon.daml:12-14 — kupon kuartalan. 10000 face @ 450bps = 112.50
+quarterlyCouponAmount faceValue couponRateBps =
+  faceValue * intToDecimal couponRateBps / 10000.0 / 4.0
+
+-- Guard.daml:116-159 — GuardRepay. INI YANG DITRANSKRIPSI, satu require per satu assertMsg.
+choice GuardRepay : GuardRepayResult
+  with priceFeedCid, loanCid, policyCid
+  controller guardAgent
+  do
+    policy <- fetch policyCid ; loan <- fetch loanCid ; feed <- fetch priceFeedCid
+    assertMsg "policy belongs to a different borrower"  (policy.borrower   == borrower)
+    assertMsg "loan belongs to a different borrower"    (loan.borrower     == borrower)
+    assertMsg "guard agent mismatch on policy"          (policy.guardAgent == guardAgent)
+    assertMsg "guard agent mismatch on loan"            (loan.guardAgent   == guardAgent)
+    assertMsg "price feed is for a different instrument"
+      (feed.instrumentId == loan.collateralInstrumentId)
+
+    let healthBefore = healthRatioBps loan.collateralAmount feed.price loan.outstanding
+    -- ◀◀◀ THE NARROW GATE. Ini satu baris yang jadi seluruh tesis produk.
+    assertMsg "Health Ratio is at/above the Guard Trigger; auto-repay refused"
+      (healthBefore < policy.triggerRatioBps)
+
+    let needed      = amountToReachTarget loan.collateralAmount feed.price
+                                          loan.outstanding policy.targetRatioBps
+    let repayAmount = min needed (min policy.maxRepayPerEvent balance)
+    assertMsg "nothing to repay (vault empty or target already met)" (repayAmount > 0.0)
+
+    newLoanCid <- exercise loanCid ApplyRepayment with repayAmount
+    -- create RescueEvent + recreate vault dengan balance dikurangi
+
+-- Guard.daml:167-199 — StartGracePeriod. NONCONSUMING. Assert yang sama, PLUS:
+    assertMsg "vault balance is sufficient; run GuardRepay instead of opening grace"
+      (balance < needed)
+    -- graceWindow now = now + 72 jam
+
+-- Coupon.daml:73-108 — SweepToLoan. ⚠️ SENGAJA NOL health gate.
+    assertMsg "coupon sweep is not enabled on this policy" policy.couponSweep
+    -- "sweeping a coupon is a proactive paydown, not a breach response"
+    -- ⚠️ Cermin TIDAK meng-cap ini. Di EVM WAJIB di-cap: min(couponDue, debt). Lihat K5.
+```
+
+### Skenario test yang harus dicover (dari `GuardTests.daml`)
+
+| Test | Assert |
+|---|---|
+| `test_healthAtPar` | harga 1.00 → **16667** bps persis |
+| `test_healthAtDip` | harga 0.76 → **12667** bps persis |
+| `test_rescueRestoresTarget` | repay **758.62**, outstanding **5241.38**, health **14500** |
+| `test_refuseWhenHealthy` | `vm.expectRevert(Refused_Healthy.selector)` |
+| `test_refuseStaleOracle` | `warp(MAX_STALE + 1)` → `Refused_StaleOracle` |
+| `test_refuseSameRound` | 2× `guardRepay` pada roundId sama → `Refused_AlreadyActed` |
+| `test_refuseAfterRevoke` | `revokeAgent()` → `Refused_AgentRevoked` |
+| `test_cappedByMaxRepay` | repay ter-cap di 2000 |
+| `test_cappedByReserve` | allowance kecil → repay ter-cap di allowance |
+| `test_couponNoHealthGate` | `sweepCoupon()` **berhasil pada posisi sehat** |
+| `test_couponAmount` | 10000 × 450bps ÷ 4 = **112.50** |
+| `test_liquidateSeizes` | health < 11000 → collateral benar-benar pindah |
+| `test_liquidateRefusesHealthy` | health ≥ 11000 → revert |
+| 🔴 `test_abiSurface` | **fuzz: nol fungsi `onlyAgent` yang menerima `address`/`uint256`.** Ini yang membuktikan tesisnya |
+
+---
+
+## 6. Jadwal
+
+### MINGGU 10 AGT
+- **Jam 0-3:** TASK 0 lengkap (§2). 🔴 **Gate: ABI beku + stub ter-deploy + posting ke grup**
+- **Jam 3-EOD:** `DefralVault` asli + `NavOracle` + mock + Foundry test. **Target: `forge test` hijau lokal**
+
+### SENIN 11 AGT
+- **09-12:** Deploy semua + **`forge verify-contract` di BaseScan** (non-opsional — seluruh argumen "juri bisa baca `require()` sendiri" bergantung padanya). `registerRepayer(vault)`. `openPosition` dengan angka demo persis. **Umumkan alamat baru — ABI tidak berubah**
+- **12-15:** `test_abiSurface` + adversarial mirror + siapkan prasyarat tiap serangan (oracle basi, round sama, posisi kedua yang TIDAK dijaga buat demo `liquidate`)
+- **15-21:** **W1 `cermin-guard`** (trigger `Event` → `AnswerUpdated`) + **W2 `defral-coupon`** (trigger `Schedule` → `sweepCoupon`). Discord node di **KEDUA** branch.
+  ⚠️ Buat dengan **`enabled: true`** — `create_workflow` ninggalin disabled dan **nol yang fire**
+
+### SELASA 12 AGT
+- **09-12:** **W3 `Block` watchdog** + **W4 `Manual` read-only** + jalur `check-and-execute`
+- **12-13:** `docs/TEARDOWN.md` — hasil 4 probe + temuan audit + **koreksi issue #1869** (gap #4 dan #5 faktual salah: `/api/address-book` dan `/api/user/wallet/balances` **menerima `kh_` key hari ini**)
+- **13-14:** dress rehearsal · **14-16:** bantu bima rekam · **16-17:** verifikasi tiap tx link di incognito · **17-19:** SUBMIT
+
+---
+
+## 7. Gotcha KeeperHub yang bakal nabrak lo
+
+| Gotcha | Konsekuensi |
+|---|---|
+| `chainId` **NUMBER** di Direct Execution REST, **STRING** `"84532"` di node config workflow | silent failure |
+| `functionName` di REST, **`abiFunction`** di workflow node | issue #1927 |
+| `abi` harus **JSON STRING**, bukan array | silent 422 |
+| `simulate` **boolean, di BODY** — jangan string, jangan query param | issue #1959 |
+| `functionArgs` = array posisional yang **di-JSON-stringify** | — |
+| `create_workflow` bikin workflow **DISABLED** | nol yang fire |
+| Chain sponsored: `From` di explorer = **relayer**, aksi lo = **internal call**, **gak muncul di history wallet** | **selalu link `transactionLink` dari KeeperHub** |
+| `receiptStatus` punya 5 nilai + status ke-6 non-terminal tak terdokumentasi **`unconfirmed`** | jangan perlakukan sebagai failed |
+| Rate limit **60/min per API key** | — |
+| Gas sponsorship **butuh public mempool** → **mutually exclusive dengan private routing** | — |
+| **Testnet gas GRATIS** | broadcast kegagalan sengaja itu murah — **manfaatkan** |
+
+---
+
+## 8. Definition of Done
+
+- [ ] `interface IDefralVault` beku dan **tidak berubah** sejak Minggu menit 150
+- [ ] Semua kontrak ter-deploy + **source-verified** di BaseScan
+- [ ] `forge test` hijau, termasuk `test_abiSurface`
+- [ ] `agentExecutor` == alamat dari `kh wallet info --json`
+- [ ] **Nol fungsi `onlyAgent` yang menerima `address` atau `uint256`**
+- [ ] **Nol `topUp`, nol `withdraw`** di vault — non-custodial, dan Capability Matrix bilang begitu
+- [ ] `liquidate()` bisa dipanggil siapa pun dan **benar-benar memindahkan collateral**
+- [ ] 4 workflow ada dan `enabled: true`
+- [ ] `docs/TEARDOWN.md` ter-commit
+- [ ] TX-0 tersimpan sejak jam pertama
+
+---
+
+---
+
+## 9. 🔴 KOREKSI v2 — dari audit exhaustif seluruh repo Cermin
+
+Empat agent baca **setiap** file Cermin. Temuan yang **mengubah kontrak lo**. Baca ini sebelum nulis Solidity.
+
+### K1. `LIQUIDATION_BPS = 11000` ADALAH "$110 lawan $100" milik tim, dalam basis points
+
+Ini rekonsiliasi paling bersih di seluruh proyek. **Taruh di slide:**
+
+```
+16667 bps ← posisi sehat (10.000 @ 1.00 lawan utang 6.000)
+          │
+13000 bps ← triggerBps  — agent bertindak DI BAWAH ini
+          │
+          │   ◀━━━━ DEFENCE WINDOW. Seluruh tugas reserve adalah
+          │         menjaga lo keluar dari jendela 2000 bps ini.
+          │
+11000 bps ← LIQUIDATION_BPS — siapa pun boleh menyita
+```
+
+`LIQUIDATION_BPS = 11000` · `LIQUIDATION_BONUS_BPS = 500` · **permissionless**.
+Pool-only seizure kelihatan kayak fungsi admin dan ngundang pertanyaan *"jadi siapa yang manggil ini?"*
+
+### K2. 🔴 Rounding half-up itu LOAD-BEARING
+
+Daml pakai `round` (half away from zero). Solidity integer division **truncate**.
+
+```solidity
+function _mulDivRound(uint256 a, uint256 b, uint256 d) internal pure returns (uint256) {
+    return (a * b + d / 2) / d;      // ◀ WAJIB. Tanpa ini 12666.66 jadi 12666, bukan 12667
+}
+```
+
+Angka demo **12667** muncul di 4 file Cermin + README + `Demo.daml:181` (`rescue.healthBefore === 12667`). Kalau meleset 1 bps, argumen *"tiga implementasi independen, satu angka"* mati. **Test harus assert `16667` dan `12667` persis.**
+
+`amountToReachTarget` **truncate ke bawah** ke unit terkecil debt token — Daml juga gak membulatkannya.
+
+### K3. 🔴 `allowCollateral()` + collateral KEDUA = bukti klaim "dalam bentuk apapun". 10 menit.
+
+```solidity
+function allowCollateral(address token, string calldata instrumentId, uint8 decimals_, bool yieldBearing) external onlyOwner;
+```
+
+Daftarkan **dua**: `dUST` (treasury, `yieldBearing = true`) dan **`mXAU`** (emas, `yieldBearing = false`).
+
+Demo nunjukin **engine yang sama** melindungi dua-duanya. Satu panggilan `allowCollateral` ekstra = seluruh bukti klaim tim, dan makan **sepuluh menit**.
+
+### K4. 🔴 Coupon harus DEGRADE jadi no-op, JANGAN PERNAH abort
+
+Bug Cermin: `payCoupon` dengan `couponRateBps = 0` menghitung `0.0`, melanggar `ensure amount > 0.0` (`Coupon.daml:42`) → **transaksi THROW**. Jalanin demo Cermin pakai emas → **hard failure di `Demo.daml:224`**, bukan no-op senyap.
+
+Di EVM: collateral non-yield → `pendingCoupon` tetap 0 → `sweepCoupon()` revert `Refused_NoCouponDue()` **dan agent gak pernah manggilnya** karena `couponDue() == 0`. Loop agent jalan nol kali. **Itu degradasi yang Daml gak pernah punya.**
+
+### K5. 🔴 Cap `sweepCoupon` — Cermin TIDAK meng-cap-nya
+
+`SweepToLoan` (`Coupon.daml:73-108`) **uncapped, unthrottled, nol health assert**. Kalau kupon > outstanding, `ApplyRepayment` **REVERT** (`assertMsg "cannot repay more than outstanding"`) — lebih buruk dari cap.
+
+```solidity
+uint256 amount = _min(couponDue(), position.debt);   // ◀ cap, jangan revert
+```
+
+Health gate tetap **sengaja tidak ada** — sweep itu paydown proaktif (`Coupon.daml:70-72`). Itu benar, pertahankan.
+
+### K6. 🔴 `setPolicy` WAJIB ADA — ada 2 kontrol UI yang sekarang diam-diam gak ngapa-ngapain
+
+`GuardPolicy` Daml punya **nol choice** — immutable. Akibatnya `store.ts:419-435` `setGuardTrigger` adalah **NO-OP di live mode**, dan `Vault.tsx:53-55` **menyembunyikan toggle Coupon Sweep**. Dua kontrol yang sudah ter-ship dan terlihat, tapi mati.
+
+`setPolicy` ~6 baris dan **menghidupkan dua-duanya**. Pertahankan `ensure` Daml sebagai `require()`:
+```solidity
+require(triggerBps >= 12000 && triggerBps <= 15000);   // MIN/MAX_TRIGGER_BPS
+require(targetBps >= triggerBps);
+require(maxRepayPerEvent > 0);
+```
+
+### K7. 🔴 Likuidasi di-gate HEALTH sebagai PRIMARY, grace cuma penunda
+
+Bug Cermin: `LastResortDefault` **nol health check** — dia gak fetch PriceFeed sama sekali. Posisi sehat 16667 bps **bisa di-default** pakai `GracePeriod` kedaluwarsa mana pun. Dan `GracePeriod` nol choice + Daml nol auto-archive → **marker itu abadi**.
+
+Lebih parah: `StartGracePeriod` **nonconsuming tanpa idempotency guard** → agent mencetak trigger default permanen baru **tiap poll tick** selama vault kosong.
+
+```solidity
+function liquidate(address borrower) external {
+    uint16 h = healthRatioBps(borrower);
+    if (h >= LIQUIDATION_BPS) revert NotLiquidatable(h);     // ◀ PRIMARY gate
+    if (graceExpiry[borrower] > block.timestamp) revert GraceStillOpen(graceExpiry[borrower]);
+    ...
+}
+function _clearGrace(address b) internal;   // ◀ panggil saat health pulih
+```
+
+### K8. Escrow BENERAN — `Lock` Cermin cuma disclosure
+
+`Assets.daml:65-69` `Unlock` **satu-satunya assert-nya** `isSome lockedBy`. Nol loan di-fetch, nol saldo dicek, **`lockHolder` gak bisa protes**. **Borrower bisa unlock dan mentransfer collateral yang di-pledge kapan saja selagi loan hidup.**
+
+Jadi `Loan.collateralAmount` di Cermin **bisa gak di-back apa-apa**. Escrow ERC20 nyata di EVM **memperbaiki** ini — bukan mereproduksinya. Tulis di README: ini satu tempat lagi versi EVM lebih kuat.
+
+### K9. `maturity` mati total — hapus. `faceValue` → `collateralQty`
+
+`maturity` di-set di 4 tempat, **dibaca nol choice**, gak pernah dibandingkan `getTime`. Dekorasi.
+
+`faceValue` itu bahasa obligasi buat **kuantitas** — ons buat emas, sats buat wBTC. Pakai `collateralQty`.
+
+### K10. Oracle: `roundId` monoton + harga **8 desimal** (konvensi Chainlink)
+
+`pushPrice` **HARUS** mengembalikan `uint80` yang naik monoton. Angka itu **seluruh pengganti** dari cid-churn consuming-choice Daml, jadi satu-satunya properti keamanan yang bergantung padanya.
+
+---
+
+### ✅ Yang TIDAK berubah — desain lo tetap
+
+Audit ngusulin kontrak **monolitik + custodial + `guardRepay(address, uint80)`**. **Ditolak**, karena:
+
+| | Usulan audit | **Defral (dipertahankan)** |
+|---|---|---|
+| Reserve | custodial, `topUpReserve`/`withdrawReserve` | **non-custodial** — keputusan tim |
+| `guardRepay` | `(address, uint80)` | **zero-arg** — agent gak bisa ngirim apa pun |
+| Struktur | satu kontrak monolitik | **factory + vault per borrower** |
+| `check-and-execute` | ❌ mati (condition read gak boleh punya arg) | ✅ **jalan native** |
+
+Zero-arg **itu tesisnya**. Non-custodial **keputusan tim**. Dua-duanya menang.
+
+---
+
+## 10. Prompt awal buat Claude lo
+
+```
+Baca D:\defral\SC\plan.md secara lengkap. Semua yang lo butuh ada di dalamnya —
+logic Daml aslinya sudah ditulis inline di §5, jadi lo TIDAK butuh repo Cermin.
+
+Mulai dari TASK 0 (§2). Jangan tulis DefralVault sebelum interface-nya beku dan
+stub-nya ter-deploy — dua orang lain nunggu ABI itu.
+
+Aturan keras:
+- Nol fungsi onlyAgent yang menerima address atau uint256. Keduanya ZERO-ARGUMENT.
+- Vault tidak pernah memegang dana reserve (non-custodial).
+- Rounding half-up: _mulDivRound(a,b,d) = (a*b + d/2)/d.
+  Test HARUS assert 16667 dan 12667 persis — angka itu ada di 4 tempat lain.
+- Baca §KOREKSI v2 sebelum nulis satu baris Solidity. 10 temuan di situ
+  mengubah kontrak.
+```
