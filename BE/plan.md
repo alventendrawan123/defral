@@ -439,10 +439,10 @@ sha256(`${chainId}|${vault}|${borrower}|${roundId}|${attemptEpoch}`)  // lowerca
 
 > #1840 **disengaja** (`lib/idempotency.ts:204-212` — *"a failed record means the prior attempt reached the broadcast path, so re-running could double-spend"*), dipin **24 jam**. Deteksi jalur basi lewat `idempotentReplay: true` di **response BODY**, bukan header.
 
-**Acceptance:** 🔴 **10 test `guard.test.ts` lulus TANPA DIUBAH** melawan `KeeperHubLedger` yang di-stub. Checkpoint **Senin 15.00**.
+**Acceptance:** 🔴 **10 test `guard.test.ts` lulus TANPA DIUBAH** melawan `KeeperHubLedger` yang di-stub. Checkpoint **Selasa 15.00**.
 
 ### 4.2 Perbaikan agent (~60 baris) — P0
-Bug 1 + Bug 2 dari §2. Kerjakan **paling pertama**, Minggu jam 0-1.
+Bug 1 + Bug 2 dari §2. Kerjakan **paling pertama**, Senin jam 0-1.
 
 ### 4.3 `agent/test/keeperhub.test.ts` (~250 baris) — P0
 **Tulis SEBELUM implementasinya.** Pakai pola `stubFetch()` dari §1.6 — routing per suffix URL, merekam setiap panggilan, nol network. Pin: body request, header Idempotency-Key, `failed`→throw, `reverted`→throw, penghormatan `X-Poll-Interval-Hint`, derivasi key.
@@ -503,7 +503,7 @@ Flush **setiap** response `/status` ke `docs/evidence/*.json` dan **commit**.
 
 ## 5. Jadwal
 
-### MINGGU 10 AGT
+### SENIN 10 AGT
 | Jam | |
 |---|---|
 | 0-1 | 🔴 Bug 1 (overlap guard). 15 baris. **Paling pertama** |
@@ -511,7 +511,7 @@ Flush **setiap** response `/status` ke `docs/evidence/*.json` dan **commit**.
 | **3** | 🔴 **alven serahkan ABI beku + alamat stub** — mulai integrasi nyata |
 | 3-EOD | `KeeperHubLedger` melawan **kontrak stub nyata**. Wajib: `${oracle}@${roundId}` |
 
-### SENIN 11 AGT
+### SELASA 11 AGT
 | Jam | |
 |---|---|
 | 09-15 | `KeeperHubLedger` lengkap: polling, receipt decode, revert→throw, idempotency `attemptEpoch` |
@@ -519,8 +519,15 @@ Flush **setiap** response `/status` ke `docs/evidence/*.json` dan **commit**.
 | 15-19 | 🔴 **RESCUE NYATA PERTAMA.** `setPrice(0.76)` → agent fire → BaseScan Success |
 | 19-21 | Chaos suite |
 
-### SELASA 12 AGT
+### RABU 12 AGT
 `09-12` `prove.ts` lengkap · `12-13` reconciler + arsip JSON, **commit** · `13-14` dress rehearsal · `14-16` bantu bima rekam · `16-17` `pnpm test` hijau dari clone bersih · `17-19` **SUBMIT**
+
+
+### KAMIS 13 AGT — BUFFER. Deadline **17.00 WIB**.
+
+**Nol commit kode.** Hanya: buka ulang tiap tautan tx di incognito · konfirmasi frontend ter-deploy hidup · konfirmasi video bisa diputar · konfirmasi repo public · jawab pertanyaan panitia.
+
+**Kalau seluruh tim menganggur hari ini, rencananya berhasil.**
 
 ---
 

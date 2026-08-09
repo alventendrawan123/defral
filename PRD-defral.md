@@ -8,13 +8,14 @@
 | **Owner dokumen** | alven |
 | **Kontributor** | **alven** — smart contract · **islakun** — backend & agent · **bima** — frontend & video |
 | **Target** | KeeperHub Agents Onchain Hackathon (DoraHacks) |
-| **Deadline** | 2026-08-13 · 12:00 UTC+2 · **17:00 WIB** |
+| **Deadline** | Kamis 2026-08-13 · 12:00 UTC+2 · **17:00 WIB** |
+| **Hari kerja** | Sen 10 · Sel 11 · Rab 12 Agt · Kam 13 pagi = buffer |
 | **Chain** | Base Sepolia `84532` |
 | **Repo** | `github.com/alventendrawan123/defral` |
 | **Plan eksekusi** | `SC/plan.md` · `BE/plan.md` · `FE/plan.md` |
 | **Predecessor** | Cermin-RWA — Build on Canton (Encode Club), Juli 2026 |
-| **Alamat kontrak** | *(diisi Senin 11 Agt)* |
-| **Tautan bukti** | *(diisi Selasa 12 Agt)* |
+| **Alamat kontrak** | *(diisi Selasa 11 Agt)* |
+| **Tautan bukti** | *(diisi Rabu 12 Agt)* |
 
 > **Dokumen ini menjawab APA dan KENAPA.** Detail GIMANA ada di tiga `plan.md`. Kalau keduanya bertentangan, **`plan.md` yang menang** untuk signature dan endpoint; PRD yang menang untuk perilaku dan batasan.
 
@@ -292,7 +293,7 @@ Jantung dokumen ini. **Setiap gap di §5 muncul di sini.** Yang tidak diperbaiki
 
 ## 8. APPETITE & CONSTRAINT
 
-**Anggaran: 3 hari kerja (10-12 Agt), 3 orang, masing-masing menyetir satu Claude agent. 13 Agt murni freeze.**
+**Anggaran: 3 hari kerja (Sen 10 – Rab 12 Agt), 3 orang, masing-masing menyetir satu Claude agent. Kamis 13 Agt murni freeze, deadline 17.00 WIB.**
 Waktu tetap, scope variabel.
 
 Constraint keras yang **membentuk** solusi ini, bukan sekadar mengganggunya:
@@ -486,32 +487,32 @@ Prioritas: **M**ust · **S**hould · **C**ould. *Must* maksimum 60% effort.
 
 | # | Risiko | Mitigasi | Owner | Kapan |
 |---|---|---|---|---|
-| **R1** | Nol Solidity ada saat mulai; tim terakhir menulis Daml | Deploy **stub** dengan ABI beku di jam ke-3, sebelum logika ditulis | alven | Min 10 |
+| **R1** | Nol Solidity ada saat mulai; tim terakhir menulis Daml | Deploy **stub** dengan ABI beku di jam ke-3, sebelum logika ditulis | alven | Sen 10 |
 | **R2** | 🔴 *"Kalian yang menulis pool, oracle, dan mendorong harganya sendiri — membuktikan apa?"* | **Artefak, bukan slide:** tiga kunci terpisah dinyatakan di muka · dua tx penolakan · saldo EOA agent nol | semua | §17 |
-| **R3** | Ini terbaca sebagai liquidation guardian ke-15 | Nol mitigasi teknis. 20 detik pertama video + paragraf pertama README | bima | Sel 12 |
-| **R4** | Log KeeperHub kedaluwarsa sebelum penjurian 17-20 Agt | Arsip JSON ter-commit sejak hari pertama | islakun | Min 10 |
+| **R3** | Ini terbaca sebagai liquidation guardian ke-15 | Nol mitigasi teknis. 20 detik pertama video + paragraf pertama README | bima | Rab 12 |
+| **R4** | Log KeeperHub kedaluwarsa sebelum penjurian 17-20 Agt | Arsip JSON ter-commit sejak hari pertama | islakun | Sen 10 |
 
 ### Pertanyaan terbuka — *impact tinggi, confidence rendah, di atas*
 
 | # | Pertanyaan | Kalau jawabannya buruk | Diprobe |
 |---|---|---|---|
-| **Q1** | `msg.sender` di bawah gas sponsorship — EOA enclave atau relayer? | **Seluruh tesis** perlu ditulis ulang jadi allowlist, dan klaim diturunkan terbuka | Min menit 50 |
-| **Q2** | Apakah KeeperHub mem-broadcast transaksi yang pasti revert? | **F2 dan F3 hilang** — bukti penolakan harus didesain ulang | Min menit 65 |
-| **Q3** | Apakah `check-and-execute` menerima view nol-argumen? | Turun ke contract-call. **Downgrade, bukan kill** | Min menit 80 |
-| **Q4** | Retensi log free-tier sampai 17-20 Agt? | Sudah dimitigasi oleh R4 | Min 10 |
+| **Q1** | `msg.sender` di bawah gas sponsorship — EOA enclave atau relayer? | **Seluruh tesis** perlu ditulis ulang jadi allowlist, dan klaim diturunkan terbuka | Sen 10 · menit 50 |
+| **Q2** | Apakah KeeperHub mem-broadcast transaksi yang pasti revert? | **F2 dan F3 hilang** — bukti penolakan harus didesain ulang | Sen 10 · menit 65 |
+| **Q3** | Apakah `check-and-execute` menerima view nol-argumen? | Turun ke contract-call. **Downgrade, bukan kill** | Sen 10 · menit 80 |
+| **Q4** | Retensi log free-tier sampai 17-20 Agt? | Sudah dimitigasi oleh R4 | Sen 10 |
 
 ### Gate keputusan
 
 | | Kapan | Lolos kalau |
 |---|---|---|
-| **CP1** | Min menit 50 | Q1 terjawab |
-| **CP2** | Min menit 65 | Q2 terjawab |
-| **CP3** | **Min menit 150** | **ABI beku + stub ter-deploy** ← paling mahal kalau lewat |
-| **CP4** | Sen 11.00 | Kontrak asli ter-deploy + **verified** |
-| **CP5** | Sen 15.00 | Suite test lulus tanpa diubah |
-| **CP6** | **Sen 21.00** | **Rescue nyata pertama** |
+| **CP1** | Sen 10 · menit 50 | Q1 terjawab |
+| **CP2** | Sen 10 · menit 65 | Q2 terjawab |
+| **CP3** | **Sen 10 · menit 150** | **ABI beku + stub ter-deploy** ← paling mahal kalau lewat |
+| **CP4** | Sel 11 · 11.00 | Kontrak asli ter-deploy + **verified** |
+| **CP5** | Sel 11 · 15.00 | Suite test lulus tanpa diubah |
+| **CP6** | **Sel 11 · 21.00** | **Rescue nyata pertama** |
 
-**Kalau B6 lewat**, korbankan berurutan sampai video hari Selasa aman: x402 listing → differential oracle → W3+W4 → reconciler → W1. **Jangan pernah geser tanggal video.**
+**Kalau CP6 lewat**, korbankan berurutan sampai video hari Rabu aman: x402 listing → differential oracle → W3+W4 → reconciler → W1. **Jangan pernah geser tanggal video.**
 
 ---
 

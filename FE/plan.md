@@ -173,7 +173,7 @@ Bangun sistem "comic/ink": kartu bergaris tebal, halftone dot pattern, speech bu
 | `PROVENANCE.md` + README | — | §4.5 |
 | 🎬 **video 3 menit** | — | §5 |
 
-## 2. Repo & commit hygiene (Minggu jam 0 — lo yang pegang)
+## 2. Repo & commit hygiene (Senin jam 0 — lo yang pegang)
 
 ```bash
 git clone https://github.com/alventendrawan123/defral.git
@@ -325,16 +325,16 @@ Plus section **"Apa yang nyata vs apa yang mock"**.
 
 ## 6. Jadwal
 
-### MINGGU 10 AGT — nol blocker, mulai sekarang
+### SENIN 10 AGT — nol blocker, mulai sekarang
 1. Repo + commit import (§2)
 2. Purge copy Canton + `AddressPill` (§3)
 3. **Capability Matrix** shell dengan fixture data (§4.1) — 8 baris, tiap baris punya slot bukti
 4. **Jam 3+:** alven serahkan alamat stub → sambungkan ke alamat nyata
 
-### SENIN 11 AGT
+### SELASA 11 AGT
 Capability Matrix melawan **data nyata**, tiap sel bawa `transactionLink` · Receipt chip (§4.2) · Halaman `/proof` (§4.3) · **Mulai tulis shot list video**
 
-### SELASA 12 AGT
+### RABU 12 AGT
 | Jam | |
 |---|---|
 | 09-12 | Halaman bukti final + beat side-by-side liquidation (§4.4) + rapikan untuk rekaman |
@@ -343,6 +343,13 @@ Capability Matrix melawan **data nyata**, tiap sel bawa `transactionLink` · Rec
 | **14-16** | 🎬 **REKAM VIDEO.** Satu take penuh, review, satu re-take. **Jangan lebih dari dua** |
 | 16-17 | **Deskripsi GitHub ditulis ulang memimpin dengan KeeperHub, bukan Canton** |
 | 17-19 | 🔴 **SUBMIT** — upload video. **Selesai 19.00, bukan tengah malam** |
+
+
+### KAMIS 13 AGT — BUFFER. Deadline **17.00 WIB**.
+
+**Nol commit kode.** Hanya: buka ulang tiap tautan tx di incognito · konfirmasi frontend ter-deploy hidup · konfirmasi video bisa diputar · konfirmasi repo public · jawab pertanyaan panitia.
+
+**Kalau seluruh tim menganggur hari ini, rencananya berhasil.**
 
 ---
 

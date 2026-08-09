@@ -54,7 +54,7 @@ Tiap requirement di bawah punya acceptance criteria di **PRD §10**. Kolom **Gap
 | **D5** | Jaminan non-yield → no-op, **bukan abort** | G8 | K4 |
 | **D6** | Sweep ter-cap `min(couponDue, debt)` | G9 | K5 |
 | **D7** | `allowCollateral(token, yieldBearing)`, **dua** jaminan terdaftar | G10 | K3 |
-| **E6** | Empat tipe trigger dipakai, masing-masing beralasan domain | — | §6 Sen/Sel |
+| **E6** | Empat tipe trigger dipakai, masing-masing beralasan domain | — | §6 Sel/Rab |
 
 > 🔴 **Sebelum mulai: baca section ATURAN DESAIN YANG MENGIKAT** (paling bawah). Isinya keputusan yang sudah dikunci dari audit, dan melanggarnya berarti mengulang bug yang sudah kami temukan.
 
@@ -446,20 +446,27 @@ choice GuardRepay : GuardRepayResult
 
 ## 6. Jadwal
 
-### MINGGU 10 AGT
+### SENIN 10 AGT
 - **Jam 0-3:** TASK 0 lengkap (§2). 🔴 **Gate: ABI beku + stub ter-deploy + posting ke grup**
 - **Jam 3-EOD:** `DefralVault` asli + `NavOracle` + mock + Foundry test. **Target: `forge test` hijau lokal**
 
-### SENIN 11 AGT
+### SELASA 11 AGT
 - **09-12:** Deploy semua + **`forge verify-contract` di BaseScan** (non-opsional — seluruh argumen "juri bisa baca `require()` sendiri" bergantung padanya). `registerRepayer(vault)`. `openPosition` dengan angka demo persis. **Umumkan alamat baru — ABI tidak berubah**
 - **12-15:** `test_abiSurface` + adversarial mirror + siapkan prasyarat tiap serangan (oracle basi, round sama, posisi kedua yang TIDAK dijaga buat demo `liquidate`)
-- **15-21:** **W1 `cermin-guard`** (trigger `Event` → `AnswerUpdated`) + **W2 `defral-coupon`** (trigger `Schedule` → `sweepCoupon`). Discord node di **KEDUA** branch.
+- **15-21:** **W1 `defral-guard`** (trigger `Event` → `AnswerUpdated`) + **W2 `defral-coupon`** (trigger `Schedule` → `sweepCoupon`). Discord node di **KEDUA** branch.
   ⚠️ Buat dengan **`enabled: true`** — `create_workflow` ninggalin disabled dan **nol yang fire**
 
-### SELASA 12 AGT
+### RABU 12 AGT
 - **09-12:** **W3 `Block` watchdog** + **W4 `Manual` read-only** + jalur `check-and-execute`
 - **12-13:** `docs/TEARDOWN.md` — hasil 4 probe + temuan audit + **koreksi issue #1869** (gap #4 dan #5 faktual salah: `/api/address-book` dan `/api/user/wallet/balances` **menerima `kh_` key hari ini**)
 - **13-14:** dress rehearsal · **14-16:** bantu bima rekam · **16-17:** verifikasi tiap tx link di incognito · **17-19:** SUBMIT
+
+
+### KAMIS 13 AGT — BUFFER. Deadline **17.00 WIB**.
+
+**Nol commit kode.** Hanya: buka ulang tiap tautan tx di incognito · konfirmasi frontend ter-deploy hidup · konfirmasi video bisa diputar · konfirmasi repo public · jawab pertanyaan panitia.
+
+**Kalau seluruh tim menganggur hari ini, rencananya berhasil.**
 
 ---
 
@@ -483,7 +490,7 @@ choice GuardRepay : GuardRepayResult
 
 ## 8. Definition of Done
 
-- [ ] `interface IDefralVault` beku dan **tidak berubah** sejak Minggu menit 150
+- [ ] `interface IDefralVault` beku dan **tidak berubah** sejak Senin menit 150
 - [ ] Semua kontrak ter-deploy + **source-verified** di BaseScan
 - [ ] `forge test` hijau, termasuk `test_abiSurface`
 - [ ] `agentExecutor` == alamat dari `kh wallet info --json`
