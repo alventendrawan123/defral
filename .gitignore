@@ -13,10 +13,10 @@ out/
 
 # foundry
 cache/
-artifacts/
+out/
 broadcast/*/dry-run/
-lib/forge-std/
-lib/openzeppelin-contracts/
+# CATATAN: lib/ TIDAK diabaikan — forge install bikin git submodule, dan
+# pointer submodule-nya harus ter-commit supaya clone bersih bisa build.
 
 # env & secrets — JANGAN PERNAH commit kh_ API key atau private key
 .env

@@ -78,6 +78,89 @@ Tiap requirement di bawah punya acceptance criteria di **PRD §10**. Kolom **Gap
 
 islakun dan bima **tidak bisa mulai integrasi nyata** sampai lo selesai task ini. Kerjakan **berurutan**, jangan diacak.
 
+### 0.0 Bootstrap Foundry (15 menit) — sebelum apa pun
+
+```bash
+# install foundry kalau belum
+curl -L https://foundry.paradigm.xyz | bash && foundryup
+
+cd D:\defral\SC
+forge init . --no-git --force        # --no-git: repo defral sudah ada
+forge install OpenZeppelin/openzeppelin-contracts
+forge install smartcontractkit/chainlink-brownie-contracts   # AggregatorV3Interface
+```
+
+`SC/foundry.toml`:
+
+```toml
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+solc = "0.8.24"
+optimizer = true
+optimizer_runs = 200
+via_ir = false
+
+[rpc_endpoints]
+base_sepolia = "https://sepolia.base.org"
+
+[etherscan]
+base_sepolia = { key = "${ETHERSCAN_API_KEY}", chain = 84532 }
+```
+
+`SC/.env` — **jangan pernah di-commit**, sudah masuk `.gitignore`:
+```
+PRIVATE_KEY=0x...            # kunci deployer
+PUBLISHER_KEY=0x...          # 🔴 TERPISAH — kunci oracle. Agent tidak boleh punya ini
+BORROWER_KEY=0x...           # 🔴 TERPISAH — kunci borrower demo
+ETHERSCAN_API_KEY=...
+KEEPERHUB_API_KEY=kh_...
+AGENT_EXECUTOR=0x...         # dari `kh wallet info --json`
+```
+
+> 🔴 **Tiga kunci itu WAJIB terpisah.** Itu yang bikin demo bukan sandiwara, dan itu jawaban pertama kita untuk pertanyaan juri paling mematikan (PRD §17). Kalau publisher dan agent pakai kunci yang sama, seluruh argumen runtuh.
+
+**Layout:**
+```
+SC/
+├── src/
+│   ├── interfaces/IDefralVault.sol   ← §3, BEKU
+│   ├── DefralVault.sol · DefralVaultFactory.sol
+│   ├── NavOracle.sol · MockLendingPool.sol
+│   ├── MockUSD.sol · MockTreasury.sol
+│   └── Probe.sol                     ← §0.2, deploy DULUAN
+├── test/  · script/  · foundry.toml
+```
+
+**Perintah yang dipakai berulang:**
+```bash
+forge build && forge test -vv
+forge test --match-test test_abiSurface -vvvv
+
+# deploy
+forge script script/Deploy.s.sol:Deploy \
+  --rpc-url base_sepolia --broadcast --verify -vvvv
+
+# verify manual kalau --verify gagal (SERING, jangan panik)
+forge verify-contract <ADDR> src/DefralVault.sol:DefralVault \
+  --chain 84532 --etherscan-api-key $ETHERSCAN_API_KEY \
+  --constructor-args $(cast abi-encode "constructor(address,address,address,address)" \
+     $BORROWER $AGENT_EXECUTOR $DUSD $ORACLE)
+
+# fallback Blockscout kalau Basescan rewel
+forge verify-contract <ADDR> src/DefralVault.sol:DefralVault \
+  --chain 84532 --verifier blockscout \
+  --verifier-url https://base-sepolia.blockscout.com/api
+
+# baca chain
+cast call <ADDR> "healthRatioBps()(uint16)" --rpc-url base_sepolia
+```
+
+> **`forge verify-contract` non-opsional.** Seluruh argumen kita — *"juri bisa baca `require()` sendiri"* — bergantung pada source terverifikasi. Kalau `--verify` gagal saat deploy, verify manual **hari itu juga**, jangan ditunda.
+
+---
+
 ### 0.1 Akses KeeperHub (20 menit)
 ```bash
 # signup app.keeperhub.com, verifikasi email (Turnkey wallet auto-provisioned)
