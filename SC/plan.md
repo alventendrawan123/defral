@@ -22,6 +22,45 @@ Kalau ada perubahan desain yang bikin kalimat itu jadi salah — **jangan lakuka
 
 ---
 
+
+---
+
+## 0.5 Requirement yang lo tutup
+
+PRD (`../PRD-defral.md`) menjawab **APA** dan **KENAPA**. Dokumen ini menjawab **GIMANA**.
+
+> **Kalau keduanya bertentangan:** `plan.md` menang untuk **signature dan endpoint**; PRD menang untuk **perilaku dan batasan**. Kalau lo nemu pertentangan, lapor ke grup — bukan pilih sendiri.
+
+Tiap requirement di bawah punya acceptance criteria di **PRD §10**. Kolom **Gap** menunjuk ke temuan audit Cermin di **PRD §6** yang requirement itu tutup.
+
+| Req | Yang harus benar | Gap | Di plan ini |
+|---|---|---|---|
+| **A1** | Agent punya **tepat dua** fungsi, keduanya nol argumen | — | §3, §5 `test_abiSurface` |
+| **A2** | `guardRepay()` revert saat rasio ≥ trigger | G11 | §4.1 |
+| **A3** | `guardRepay()` revert saat oracle basi | — | §4.1 |
+| **A4** | `guardRepay()` revert pada observasi harga yang sudah ditindak | G5 | §4.1 `lastActedRound` |
+| **A5** | Borrower bisa mencabut agent sepihak, kapan saja | — | §3 `revokeAgent` |
+| **A6** | Nol proxy, nol `delegatecall`, nol upgrade, nol `owner` | — | §4.1 |
+| **B1** | Vault **tidak punya** `withdraw()` maupun `topUp()` | G3 | §3, §5 |
+| **B2** | Cadangan = `min(balanceOf, allowance)`, transfer langsung borrower→pool | G3 | §4.1 |
+| **C1** | `liquidate()` bisa dipanggil **siapa pun** saat rasio < 11000 | G1 | §4.4 |
+| **C2** | Likuidasi **benar-benar memindahkan** jaminan + bonus 500 bps | G1 | §4.4 |
+| **C3** | Jaminan **di-escrow**; tidak bisa ditarik selagi utang hidup | G2 | §4.4 |
+| **C4** | Grace **menunda** likuidasi, health tetap gerbang primer | G1 | §4.4, K7 |
+| **D1** | Jumlah bayar dihitung **callee**: `min(kebutuhan, cap, cadangan)` | G4 | §4.1 |
+| **D2** | Angka **identik** dengan agent dan UI | — | §5, K2 |
+| **D3** | `setPolicy` hidup, dibatasi 12000-15000 bps | G7 | §3, K6 |
+| **D4** | `sweepCoupon()` **tanpa** gerbang health | G4 | §4.1 |
+| **D5** | Jaminan non-yield → no-op, **bukan abort** | G8 | K4 |
+| **D6** | Sweep ter-cap `min(couponDue, debt)` | G9 | K5 |
+| **D7** | `allowCollateral(token, yieldBearing)`, **dua** jaminan terdaftar | G10 | K3 |
+| **E6** | Empat tipe trigger dipakai, masing-masing beralasan domain | — | §6 Sen/Sel |
+
+> 🔴 **Sebelum mulai: baca section ATURAN DESAIN YANG MENGIKAT** (paling bawah). Isinya keputusan yang sudah dikunci dari audit, dan melanggarnya berarti mengulang bug yang sudah kami temukan.
+
+**Yang tidak ada di tabel ini bukan pekerjaan lo.** Kalau agent lo mulai ngerjain sesuatu yang tidak menutup satu pun baris di atas, hentikan.
+
+
 ## 1. Keputusan yang sudah dikunci
 
 | # | Keputusan | Kenapa |
@@ -459,7 +498,10 @@ choice GuardRepay : GuardRepayResult
 
 ---
 
-## 9. 🔴 KOREKSI v2 — dari audit exhaustif seluruh repo Cermin
+## 9. 🔴 ATURAN DESAIN YANG MENGIKAT — turunan audit Cermin
+
+Sepuluh aturan di bawah ini **bukan saran**. Semuanya turunan langsung dari audit baris-per-baris atas Cermin-RWA, dan semuanya menutup satu baris di PRD §6. **Baca sebelum menulis satu baris Solidity.**
+
 
 Empat agent baca **setiap** file Cermin. Temuan yang **mengubah kontrak lo**. Baca ini sebelum nulis Solidity.
 
@@ -523,7 +565,7 @@ Health gate tetap **sengaja tidak ada** — sweep itu paydown proaktif (`Coupon.
 
 ### K6. 🔴 `setPolicy` WAJIB ADA — ada 2 kontrol UI yang sekarang diam-diam gak ngapa-ngapain
 
-`GuardPolicy` Daml punya **nol choice** — immutable. Akibatnya `store.ts:419-435` `setGuardTrigger` adalah **NO-OP di live mode**, dan `Vault.tsx:53-55` **menyembunyikan toggle Coupon Sweep**. Dua kontrol yang sudah ter-ship dan terlihat, tapi mati.
+`GuardPolicy` Daml punya **nol choice** — immutable. Akibatnya dua kontrol UI yang sudah ter-ship di Cermin diam-diam tidak melakukan apa-apa: set-trigger no-op di live mode, dan toggle Coupon Sweep disembunyikan. **`setPolicy` menghidupkan dua-duanya** (PRD G7, req D3).
 
 `setPolicy` ~6 baris dan **menghidupkan dua-duanya**. Pertahankan `ensure` Daml sebagai `require()`:
 ```solidity
@@ -584,17 +626,26 @@ Zero-arg **itu tesisnya**. Non-custodial **keputusan tim**. Dua-duanya menang.
 ## 10. Prompt awal buat Claude lo
 
 ```
-Baca D:\defral\SC\plan.md secara lengkap. Semua yang lo butuh ada di dalamnya —
-logic Daml aslinya sudah ditulis inline di §5, jadi lo TIDAK butuh repo Cermin.
+Baca dua dokumen ini lengkap, urut:
+  1. D:\defral\PRD-defral.md   — APA dan KENAPA. Fokus §4 (tesis), §6 (peta perbaikan G1-G11), §10 (requirement).
+  2. D:\defral\SC\plan.md      — GIMANA. Semua yang lo butuh ada di dalamnya.
 
-Mulai dari TASK 0 (§2). Jangan tulis DefralVault sebelum interface-nya beku dan
-stub-nya ter-deploy — dua orang lain nunggu ABI itu.
+Logic Daml aslinya sudah ditulis inline di plan §5, jadi lo TIDAK butuh repo lain.
+
+Requirement yang lo tutup: A1-A6, B1-B2, C1-C4, D1-D7, E6. Tabelnya di plan §0.5.
+Acceptance criteria tiap requirement ada di PRD §10 — pakai itu sebagai definition of done,
+bukan perasaan "kayaknya udah jalan".
+
+Mulai dari TASK 0 (plan §2). JANGAN tulis DefralVault sebelum interface-nya beku dan stub-nya
+ter-deploy — islakun dan bima nunggu ABI itu, dan itu blocker CP3 di PRD §14.
+
+Baca plan §9 (ATURAN DESAIN YANG MENGIKAT) SEBELUM nulis satu baris Solidity. Sepuluh aturan
+di situ turunan audit baris-per-baris, dan melanggarnya berarti mengulang bug yang sudah ketemu.
 
 Aturan keras:
-- Nol fungsi onlyAgent yang menerima address atau uint256. Keduanya ZERO-ARGUMENT.
-- Vault tidak pernah memegang dana reserve (non-custodial).
+- Nol fungsi onlyAgent yang menerima address atau uint256. Tepat DUA fungsi, keduanya ZERO-ARGUMENT.
+- Vault tidak pernah memegang dana cadangan. Nol withdraw(), nol topUp().
 - Rounding half-up: _mulDivRound(a,b,d) = (a*b + d/2)/d.
-  Test HARUS assert 16667 dan 12667 persis — angka itu ada di 4 tempat lain.
-- Baca §KOREKSI v2 sebelum nulis satu baris Solidity. 10 temuan di situ
-  mengubah kontrak.
+  Test HARUS assert 16667 dan 12667 PERSIS — angka itu muncul identik di agent dan UI, dan
+  kesamaan itu adalah argumennya.
 ```

@@ -1,0 +1,48 @@
+# deps
+node_modules/
+.pnp
+.pnp.js
+
+# build
+dist/
+build/
+out/
+.next/
+.vite/
+*.tsbuildinfo
+
+# foundry
+cache/
+artifacts/
+broadcast/*/dry-run/
+lib/forge-std/
+lib/openzeppelin-contracts/
+
+# env & secrets — JANGAN PERNAH commit kh_ API key atau private key
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# os / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# test
+coverage/
+.nyc_output/
+
+# CATATAN: docs/evidence/*.json HARUS ter-commit.
+# Retensi log free-tier KeeperHub tidak terverifikasi, transaksi kita 11-12 Agt,
+# penjurian 17-20 Agt. Halaman bukti membaca arsip statik, bukan API live.
+!docs/evidence/
+!docs/evidence/**

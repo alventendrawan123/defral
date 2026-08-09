@@ -15,6 +15,37 @@ Bukti itu bukan paragraf README. Bukti itu **transaksi reverted yang bisa diklik
 
 ---
 
+
+---
+
+## 0.5 Requirement yang lo tutup
+
+PRD (`../PRD-defral.md`) menjawab **APA** dan **KENAPA**. Dokumen ini menjawab **GIMANA**.
+
+> **Kalau keduanya bertentangan:** `plan.md` menang untuk **signature dan endpoint**; PRD menang untuk **perilaku dan batasan**. Kalau lo nemu pertentangan, lapor ke grup — bukan pilih sendiri.
+
+Tiap requirement di bawah punya acceptance criteria di **PRD §10**. Kolom **Gap** menunjuk ke temuan audit Cermin di **PRD §6** yang requirement itu tutup.
+
+| Req | Yang harus benar | Gap | Di plan ini |
+|---|---|---|---|
+| **E1** | **Setiap** perubahan state agent lewat KeeperHub | — | §4.1 |
+| **E2** | Transaksi ter-revert jadi **kegagalan**, bukan sukses | — | §4.1 `assertTerminalSuccess` |
+| **E3** | Hasil tidak diketahui **tidak pernah** memicu broadcast ulang | G5 | §4.1, §4.7 |
+| **E4** | Nol cycle bertumpuk | G6 | §2 jebakan 1 |
+| **E5** | Retry membedakan kegagalan deterministik dari infra | G5 | K1 |
+| **D1** | Agent **tidak pernah** mengirim jumlah — callee yang hitung | G4 | §4.1 |
+| **D2** | Angka **identik** dengan Solidity dan UI | — | §1.2 |
+| **F1** | **Satu perintah** menghasilkan seluruh rantai bukti | — | §4.4 `prove.ts` |
+| **F2** | ≥2 transaksi **penolakan** sengaja di-broadcast, `verified` | — | §4.4 |
+| **F3** | Demo memuat posisi tak terjaga yang **benar-benar dilikuidasi** | G1 | §4.4, K4 |
+| **F5** | Semua bukti diarsipkan JSON **ter-commit** | — | §4.8 |
+| **B3** | Saldo token EOA agent **persis nol** di akhir | G3 | §4.4 langkah 7 |
+
+> 🔴 **Sebelum mulai: baca section ATURAN DESAIN YANG MENGIKAT** (paling bawah). Isinya keputusan yang sudah dikunci dari audit, dan melanggarnya berarti mengulang bug yang sudah kami temukan.
+
+**Yang tidak ada di tabel ini bukan pekerjaan lo.** Kalau agent lo mulai ngerjain sesuatu yang tidak menutup satu pun baris di atas, hentikan.
+
+
 ## 1. Kode inti yang harus lo tulis — semuanya ada di sini
 
 Repo mulai **kosong**. Tidak ada yang perlu lo cari di folder lain. Empat potong di bawah ini adalah fondasinya — tulis persis, lalu bangun di atasnya.
@@ -395,7 +426,7 @@ function assertTerminalSuccess(st: Status) {
     throw new ExecutionUnknownError(r);      // ◀ kelas BEDA, jangan retry broadcast
 }
 ```
-> KeeperHub balikin tx yang ter-revert sebagai **HTTP 200**, bukan exception. Kalau gak diterjemahkan, seluruh per-item error isolation di `guard.ts:73-79` **diam-diam melaporkan SUKSES pada rescue yang gagal.** Ini pembeda antara "kami menangani reliability" dan "kami tidak sadar."
+> KeeperHub balikin tx yang ter-revert sebagai **HTTP 200**, bukan exception. Kalau gak diterjemahkan, seluruh per-item error isolation di `runGuardCycle` (§1.4) **diam-diam melaporkan SUKSES pada rescue yang gagal.** Ini pembeda antara "kami menangani reliability" dan "kami tidak sadar."
 
 **🔴 Derivasi Idempotency-Key (issue #1840):**
 ```ts
@@ -503,7 +534,7 @@ Flush **setiap** response `/status` ke `docs/evidence/*.json` dan **commit**.
 | `simulate` boolean **di BODY** — jangan query param (#1959) | broadcast beneran |
 | `functionArgs` = array posisional **di-JSON-stringify** | — |
 | `kh_` (org) vs `wfb_` (user, **hanya** webhook auth) — **tidak bisa saling gantikan** | `kh_` di webhook → 401 |
-| Rate limit **60/min per API key** | token bucket 50/min + `ConcurrencyLimiter` (**diwarisi**, `agent/src/ledger.ts:773-790`) |
+| Rate limit **60/min per API key** | token bucket 50/min + `ConcurrencyLimiter` sendiri |
 | `403 "Daily spending cap exceeded"` | state **non-retryable** tersendiri — hentikan submit, banner. **Bukan** retry loop |
 | `receiptStatus` **5 nilai** + `unconfirmed` tak terdokumentasi | 3 terakhir = UNKNOWN |
 | Chain sponsored: `From` = relayer, aksi = internal call, **gak muncul di history wallet** | **selalu `transactionLink`** |
@@ -531,7 +562,10 @@ Flush **setiap** response `/status` ke `docs/evidence/*.json` dan **commit**.
 
 ---
 
-## 8. 🔴 KOREKSI v2 — dari audit exhaustif seluruh repo Cermin
+## 8. 🔴 ATURAN DESAIN YANG MENGIKAT — turunan audit Cermin
+
+Tujuh aturan di bawah ini **bukan saran**. Semuanya turunan langsung dari audit baris-per-baris atas Cermin-RWA. **K1 menggantikan kebijakan retry di §4.1.**
+
 
 ### K1. 🔴 Kebijakan retry #1840 — BRANCH ON `revertReason`, lebih presisi dari attemptEpoch
 
@@ -586,24 +620,26 @@ Yang lo bangun mengecilkan **penyebut** dan tidak pernah menyentuh pembilang. *"
 ## 9. Prompt awal buat Claude lo
 
 ```
-Baca D:\defral\BE\plan.md lengkap, lalu D:\defral\SC\plan.md §3 (interface kontrak beku).
+Baca dua dokumen ini lengkap, urut:
+  1. D:\defral\PRD-defral.md   — APA dan KENAPA. Fokus §4 (tesis), §6 (peta perbaikan), §10 (requirement).
+  2. D:\defral\BE\plan.md      — GIMANA. Kode intinya ditulis inline di §1.
+Lalu D:\defral\SC\plan.md §3 — interface kontrak yang sudah dibekukan alven.
 
-Kode warisan SUDAH ADA di repo — lo tidak butuh folder lain:
-  D:\defral\BE\agent\src\ledger.ts      <- interface Ledger di baris 59. JANGAN UBAH BENTUKNYA
-  D:\defral\BE\agent\src\guard.ts       <- dipakai apa adanya
-  D:\defral\BE\agent\src\health.ts      <- dipakai apa adanya
-  D:\defral\BE\agent\src\index.ts       <- Bug 1 SUDAH diperbaiki, baca komentarnya
-  D:\defral\BE\agent\test\guard.test.ts <- 10 test, HARUS LULUS TANPA DIUBAH
+Requirement yang lo tutup: E1-E5, D1, D2, F1, F2, F3, F5, B3. Tabelnya di plan §0.5.
+Acceptance criteria tiap requirement ada di PRD §10.
 
-Verifikasi dulu semuanya hijau:
-  cd D:\defral\BE\agent && npm install && npm test     # -> 20 pass, 0 fail
+Urutan kerja:
+  1. plan §2 — dua jebakan. Baca dulu, keduanya mematikan dan keduanya senyap.
+  2. plan §1.7 — tulis test SEBELUM implementasi.
+  3. plan §4.1 — KeeperHubLedger.
 
-Lalu mulai dari §4.3 (tulis test dulu), baru §4.1 (KeeperHubLedger).
+Baca plan §8 (ATURAN DESAIN YANG MENGIKAT). K1 di situ MENGGANTIKAN kebijakan retry di §4.1.
 
 Aturan keras:
-- Bentuk interface Ledger tidak boleh berubah. 10 test itu klaim headline kita.
-- Nol panggilan ke /api/execute/transfer.
-- contractId price feed WAJIB `${oracle}@${roundId}` — kalau salah, agent fire
-  sekali lalu diam selamanya tanpa error.
-- Baca §KOREKSI v2 — kebijakan retry #1840 di situ menggantikan §4.1.
+- Bentuk interface Ledger tidak boleh berubah setelah lo tulis. Suite test yang sama harus lulus
+  melawan MockLedger DAN KeeperHubLedger — itu klaim headline submission kita, dan juri
+  menjalankannya sendiri.
+- Nol panggilan ke /api/execute/transfer di seluruh codebase.
+- contractId price feed WAJIB `${oracle}@${roundId}`. Kalau salah, agent fire sekali lalu diam
+  selamanya — nol error, nol log, nol exception.
 ```

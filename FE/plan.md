@@ -7,7 +7,7 @@
 
 ---
 
-## 0. Yang lo bangun
+## 0. Dua deliverable lo
 
 Dua hal, dan yang kedua lebih penting dari kelihatannya:
 
@@ -20,7 +20,36 @@ Dua hal, dan yang kedua lebih penting dari kelihatannya:
 
 ---
 
-## 1. Yang lo bangun — repo mulai kosong
+
+---
+
+## 0.5 Requirement yang lo tutup
+
+PRD (`../PRD-defral.md`) menjawab **APA** dan **KENAPA**. Dokumen ini menjawab **GIMANA**.
+
+> **Kalau keduanya bertentangan:** `plan.md` menang untuk **signature dan endpoint**; PRD menang untuk **perilaku dan batasan**. Kalau lo nemu pertentangan, lapor ke grup — bukan pilih sendiri.
+
+Tiap requirement di bawah punya acceptance criteria di **PRD §10**. Kolom **Gap** menunjuk ke temuan audit Cermin di **PRD §6** yang requirement itu tutup.
+
+| Req | Yang harus benar | Gap | Di plan ini |
+|---|---|---|---|
+| **F4** | Capability Matrix: tiap baris punya tx nyata **atau** pernyataan fungsinya tidak ada | — | §4.1 |
+| **F3** | Posisi tak terjaga yang dilikuidasi, **berdampingan** dengan yang dijaga | G1 | §4.4 |
+| **F5** | Halaman bukti baca **JSON statik ter-commit**, bukan API live | — | §4.3 |
+| **B1** | UI menyatakan vault **tidak punya** `withdraw` — non-custody | G3 | §4.1 baris terakhir |
+| **D3** | Dua kontrol UI yang dulu mati (`setGuardTrigger`, toggle sweep) **hidup lagi** | G7 | K4 |
+| **D7** | **Dua** jaminan di UI — treasury (yield) dan emas (non-yield) | G10 | K5 |
+| **D5** | Jaminan non-yield: panel sweep bilang "tidak berlaku", **bukan error** | G8 | K5 |
+| **A1-A4** | UI menyampaikan batas otoritas agent, bukan klaim privasi | G11 | §3, §4.1 |
+| **Goal 1** | Juri bisa memverifikasi batas otoritas **tanpa mempercayai kami** | — | §4.1, §5 video |
+| **Goal 2** | Jalur borrower lengkap **tanpa menyentuh terminal** | — | §1.1 |
+
+> 🔴 **Sebelum mulai: baca section ATURAN DESAIN YANG MENGIKAT** (paling bawah). Isinya keputusan yang sudah dikunci dari audit, dan melanggarnya berarti mengulang bug yang sudah kami temukan.
+
+**Yang tidak ada di tabel ini bukan pekerjaan lo.** Kalau agent lo mulai ngerjain sesuatu yang tidak menutup satu pun baris di atas, hentikan.
+
+
+## 1. Permukaan produk yang harus dibangun
 
 Tidak ada yang perlu lo cari di folder lain. Stack: **React 19 + Vite + Tailwind 4 + Zustand + vitest**.
 
@@ -162,38 +191,63 @@ npm run dev                      # → localhost:5173
 >
 > Tapi yang bikin kita kehilangan shortlist adalah **kesan, bukan aturan.** Seri commit 08-10→08-12 di repo ini adalah **bukti** bahwa kerja KeeperHub-nya kerja hackathon ini. Itu sebabnya `PROVENANCE.md` (§4.5) ditaruh di paragraf pertama README — **disampaikan sebelum ada yang bertanya.**
 
-## 3. 🔴 Purge Canton + hapus klaim privasi
+## 3. 🔴 Klaim yang boleh dan tidak boleh dibuat
 
-Klaim privasi Daml **DIHAPUS, bukan dilemahkan**. README lama nulis *"impossible to replicate on a public EVM chain"* dan **itu BENAR** — makanya gak bisa ikut pindah. Memalsukannya (encrypted blob, commit-reveal, API "private") **terbaca tidak jujur oleh juri teknis** dan rugi lebih besar dari untungnya.
+Ini bukan soal gaya penulisan. Ini soal **satu-satunya cara paling cepat kehilangan juri**.
 
-### 3.1 Copy Canton yang harus diganti
+### 3.1 Klaim privasi: DILARANG, tanpa pengecualian
 
-| File:baris | Dari | Jadi |
+Produk pendahulu kami — Cermin-RWA di Canton — punya privasi party-scoped yang **nyata**: reserve borrower dan tiap rescue secara struktural tidak terlihat oleh lending pool. README-nya menulis *"impossible to replicate on a public EVM chain."*
+
+**Kalimat itu benar, dan justru karena benar ia tidak ikut pindah.** Di Base Sepolia setiap storage slot dan setiap event log terbaca dunia.
+
+| ❌ Jangan pernah tulis | Kenapa |
+|---|---|
+| "private", "shadow", "invisible", "hidden", "no one can see" | Salah di chain publik. Juri buka BaseScan, selesai |
+| "encrypted", "confidential" | Tidak ada enkripsi di sini |
+| Sinyal ZK / private mempool "coming soon" | Mengklaim privasi yang belum dibangun = cara tercepat kehilangan juri teknis |
+| Pengganti yang "mirip privasi" | Melemahkan klaim lebih buruk daripada menghapusnya |
+
+**Yang menggantikannya adalah BATAS OTORITAS** (PRD §4) — dan itu justru **lebih kuat** di chain publik, karena pihak ketiga bisa memverifikasinya sendiri tanpa mempercayai kami.
+
+### 3.2 Framing pengganti: TEMPORAL
+
+| ✅ Pakai ini | Kenapa jalan |
+|---|---|
+| *"Ia tidak pernah menjadi likuidasi"* | Benar, bisa diverifikasi, dan itu memang produknya |
+| *"Anda tidur melewatinya"* | Manfaat nyata, nol klaim teknis |
+| *"Agent kami mencoba mengambil uang saat posisi Anda sehat. Chain menolak. Ini hash-nya."* | **Kalimat terkuat yang kita punya.** Bisa diklik |
+| *"Kami tidak pernah memegang cadangan Anda — tidak ada fungsinya"* | Harfiah benar, diverifikasi satu `grep` |
+
+Plus satu baris jujur di suatu tempat yang terlihat: **Base Sepolia itu publik.**
+
+### 3.3 Satu kalimat yang WAJIB ada — biaya nol
+
+> *"Di bawah protection floor, saya membuka grace period, bukan fire-sale — tidak ada likuidasi paksa di sini."*
+
+Ini caption chart, first-person, suara Defral. **Satu string yang membedakan Defral dari 14 liquidation guardian di hackathon yang sama.** Jangan hilang.
+
+### 3.4 Suara produk
+
+First-person, dari sisi Defral, ke borrower. Bukan pasif, bukan korporat.
+
+| ❌ | ✅ |
+|---|---|
+| "Repayment executed successfully" | *"Harga turun 24%. Saya bayar $758.62 dari cadangan Anda. Posisi aman."* |
+| "Health factor is nominal" | *"Diperiksa jam 03.20. Sehat. Tidak ada tindakan."* |
+| "Insufficient reserve" | *"Cadangan Anda tidak cukup untuk menutup ini. Saya buka grace period dan memberi tahu pool."* |
+
+> Notifikasi **no-op** itu intinya, bukan noise. *"Diperiksa. Sehat. Tidak ada tindakan."* — **itu membuktikan gerbangnya bekerja, tiap siklus.**
+
+### 3.5 Istilah — pakai yang benar sejak awal
+
+| ❌ | ✅ | Kenapa |
 |---|---|---|
-| `NavBar.tsx:149` | "Live · Canton DevNet" | "Live · Base Sepolia" |
-| `Connect.tsx:60/85/91` | "Creating your Canton party…" | "Setting up your account…" |
-| `BorrowFlow.tsx:414/477` | "Confirmed on Canton DevNet" | "Confirmed onchain — view tx" |
-| `Dashboard.tsx:392/401/414` | copy Canton | copy Base Sepolia |
-| `App.tsx:30` | komentar Canton | — |
-| `AddressPill.tsx:5-9` | `truncateParty()` pakai `split('::')` — **sintaks party-id Canton** | `0x1234…abcd` |
-
-### 3.2 Dihapus total
-- **`PrivacyBadge.tsx`** → ganti `AuthorityBadge.tsx`
-- **Tabel Privacy Matrix `Landing.tsx:57-62` dan `:361-427`** → jadi **Capability Matrix** (§4.1)
-- Copy privasi `Landing.tsx:190/274/349`
-
-### 3.3 Dipertahankan — jangan kehilangan ini
-- 🔴 **Caption `chart.ts:115`:** *"Below the protection floor, I open a grace period instead of a fire-sale — there's no forced liquidation here."*
-  **Satu string yang membedakan Defral dari 14 liquidation guardian.** Biaya nol.
-- Parachute `isBackendMode()` — `npm run dev` tanpa `VITE_API_URL` **tetap menceritakan seluruh cerita** kalau KeeperHub down pas penjurian
-- Semua turunan risiko di `lib/health.ts`
-
-### 3.4 ⚠️ Panel komik yang jadi yatim
-`p1-blind.webp` (banker bermata tertutup) dan `h2-inpublic.webp` **terikat tematik ke klaim privasi.** Setelah privasi dicabut, dua panel ini **tidak punya tempat.**
-→ Jangan dipaksa masuk. Pakai `mascot-shield`, `mascot-watch`, `s5-crash`, `s6-saved`, `h4-liquidation` yang justru **makin nyambung** dengan cerita baru.
+| "auto-rebalancing" | **"autonomous deleveraging"** | Yang dibangun mengecilkan **penyebut** dan tidak pernah menyentuh pembilang. "Rebalancing" ngundang juri nanya *"antar leg apa?"* |
+| "vault", "shadow vault" | **"cadangan" / "reserve"** | Kita tidak punya vault yang memegang uang — itu inti non-custody-nya |
+| "bot" | **"agent"** | Konsisten dengan bahasa hackathon |
 
 ---
-
 ## 4. Yang dibangun baru
 
 ### 4.1 🔴 Capability Matrix — pengganti Privacy Matrix
@@ -238,7 +292,7 @@ Render **side-by-side**:
 
 ### 4.5 `PROVENANCE.md` + README
 
-Provenance **di paragraf pertama README**, sebelum ada yang nanya. Draf lengkapnya ada di PRD §11 — copy dari sana.
+Provenance **di paragraf pertama README**, sebelum ada yang nanya. Draf lengkapnya ada di PRD PRD §11 — copy dari sana.
 
 Intinya: apa yang dibawa dari build Canton · apa yang ditulis baru minggu ini · **dan yang hilang, tanpa pura-pura sebaliknya** (klaim privasi tidak selamat; kami menggantinya, bukan mereplikasinya).
 
@@ -273,8 +327,8 @@ Plus section **"Apa yang nyata vs apa yang mock"**.
 
 ### MINGGU 10 AGT — nol blocker, mulai sekarang
 1. Repo + commit import (§2)
-2. Purge copy Canton + `AddressPill` (§3.1)
-3. Hapus `PrivacyBadge` + Privacy Matrix → **Capability Matrix shell dengan fixture** (§4.1)
+2. Purge copy Canton + `AddressPill` (§3)
+3. **Capability Matrix** shell dengan fixture data (§4.1) — 8 baris, tiap baris punya slot bukti
 4. **Jam 3+:** alven serahkan alamat stub → sambungkan ke alamat nyata
 
 ### SENIN 11 AGT
@@ -295,13 +349,13 @@ Capability Matrix melawan **data nyata**, tiap sel bawa `transactionLink` · Rec
 ## 7. Definition of Done
 
 - [ ] Nol string "Canton" di UI (kecuali section Provenance yang memang sengaja)
-- [ ] `PrivacyBadge.tsx` **dihapus**, Privacy Matrix jadi Capability Matrix
+- [ ] Nol string terlarang §3.1 di seluruh UI (`private`, `hidden`, `invisible`, `encrypted`, `shadow`)
 - [ ] Tiap baris Capability Matrix bawa `transactionLink` nyata atau *"TIDAK ADA FUNGSINYA"*
 - [ ] Receipt chip render `verified` / `receiptStatus` / `sponsored`
 - [ ] `/proof` baca **JSON statik ter-commit**, bukan API live
 - [ ] Beat side-by-side liquidation ada, dua tx bisa diklik
 - [ ] Parachute `isBackendMode()` masih jalan
-- [ ] Caption `chart.ts:115` masih ada
+- [ ] Kalimat grace-period §3.3 ada di chart, first-person
 - [ ] `PROVENANCE.md` ditautkan dari **paragraf pertama** README
 - [ ] Deskripsi GitHub memimpin dengan KeeperHub
 - [ ] 🎬 **Video ≤3:00, tiap klaim berakhir di BaseScan dalam 10 detik**
@@ -314,7 +368,10 @@ Capability Matrix melawan **data nyata**, tiap sel bawa `transactionLink` · Rec
 
 ---
 
-## 8. 🔴 KOREKSI v2 — dari audit exhaustif seluruh repo Cermin
+## 8. 🔴 ATURAN DESAIN YANG MENGIKAT — turunan audit Cermin
+
+Tujuh aturan di bawah ini **bukan saran**. **K1 adalah pole terpanjang di frontend dan tidak ada yang menyangkanya — baca duluan.**
+
 
 ### K1. 🔴🔴 COPY PRIVASI DI-PIN OLEH TEST. Lo bakal ketemu test merah.
 
@@ -322,8 +379,9 @@ Capability Matrix melawan **data nyata**, tiap sel bawa `transactionLink` · Rec
 
 | Test | Yang di-pin |
 |---|---|
-| `Landing.test.ts:82-88` | string `'Who sees what'` dan `'Never sees it'` |
-| `strategies.test.ts:43-55` | assert **tiap** string strategi first-person **DAN** tidak mengandung istilah tertentu |
+| `Landing.test.ts` | assert **nol** string terlarang §3.1 muncul di render |
+| `strategies.test.ts` | assert **tiap** string suara Defral first-person (§3.4) |
+| `CapabilityMatrix.test.ts` | assert **tiap** baris punya `transactionLink` **atau** pernyataan fungsi-tidak-ada — nol baris kosong |
 
 **Update test-nya bareng copy-nya, dalam commit yang sama.** Jangan skip test — juri jalanin `pnpm test`.
 
@@ -351,7 +409,7 @@ Plus satu baris jujur: **Base Sepolia itu publik.**
 
 ### K4. 🔴 `setGuardTrigger` dan toggle Coupon Sweep — HIDUPKAN LAGI
 
-`store.ts:419-435` `setGuardTrigger` adalah **NO-OP di live mode**, dan `Vault.tsx:53-55` **menyembunyikan** toggle Coupon Sweep — karena `GuardPolicy` Daml immutable (nol choice).
+Di Cermin, `GuardPolicy` **immutable** (nol choice), jadi dua kontrol yang sudah ter-ship diam-diam tidak melakukan apa-apa: `setGuardTrigger` no-op di live mode, dan toggle Coupon Sweep disembunyikan.
 
 Kontrak EVM punya **`setPolicy()`**. **Dua kontrol yang sudah ter-ship dan terlihat itu jadi hidup.** Buang cabang no-op, buang kondisi yang nyembunyiin.
 
@@ -367,7 +425,7 @@ Ganti di semua copy. Yang dibangun mengecilkan penyebut dan tidak pernah menyent
 
 ### K7. Field yang gak akan pernah keisi — hapus dari UI
 
-`store.ts:28-34` `CollateralState` punya `couponRateBps` dan `maturity`, tapi **`applyPosition` tidak pernah mengisinya dari backend** — jadi live mode me-render seed mock (450bps, 2030) **seolah-olah itu state ledger, selamanya.**
+Di Cermin, `CollateralState` punya field `couponRateBps` dan `maturity` yang **tidak pernah diisi dari backend** — live mode me-render seed mock (450bps, 2030) **seolah-olah itu state ledger, selamanya.** Jangan ulangi: setiap field yang ditampilkan harus datang dari kontrak, atau tidak usah ditampilkan.
 
 `maturity` juga **dead field di Daml** — di-set 4 tempat, dibaca nol choice. **Hapus dari UI**, atau ambil beneran dari kontrak.
 
@@ -376,25 +434,26 @@ Ganti di semua copy. Yang dibangun mengecilkan penyebut dan tidak pernah menyent
 ## 9. Prompt awal buat Claude lo
 
 ```
-Baca D:\defral\FE\plan.md lengkap.
+Baca dua dokumen ini lengkap, urut:
+  1. D:\defral\PRD-defral.md   — APA dan KENAPA. Fokus §1 (write-up), §2 (masalah), §4 (tesis), §17 (FAQ).
+  2. D:\defral\FE\plan.md      — GIMANA.
 
-Kode warisan SUDAH ADA di repo — lo tidak butuh folder lain:
-  D:\defral\FE\frontend\src\           <- store.ts, screens/, components/, lib/, lib/comic/
-  D:\defral\FE\frontend\public\comic\  <- 13 panel .webp
+Requirement yang lo tutup: F3, F4, F5, B1, D3, D5, D7, plus Goal 1 dan Goal 2. Tabelnya di plan §0.5.
 
-Verifikasi dulu jalan:
-  cd D:\defral\FE\frontend && npm install && npm run dev   # -> localhost:5173
+Urutan kerja:
+  1. plan §3 — klaim yang boleh dan tidak boleh dibuat. BACA DULUAN, ini nentuin tiap string
+     yang lo tulis setelahnya.
+  2. plan §2 — repo + commit hygiene.
+  3. plan §4.1 — Capability Matrix pakai fixture. Ini komponen paling penting di UI.
+  4. plan §5 — video. Ini deliverable terpenting lo, dan shot list-nya sudah lengkap.
 
-Mulai dari §3 (purge Canton — nol blocker, bisa jalan sebelum kontrak ada),
-lalu §4.1 Capability Matrix pakai fixture dulu.
-
-!! BACA KOREKSI K1 DULU: copy privasi di-PIN OLEH TEST.
-   Landing.test.ts:82-88 dan strategies.test.ts:43-55 bakal MERAH pas lo purge.
-   Update test-nya di commit yang sama. Jangan skip test — juri jalanin npm test.
+Baca plan §8 (ATURAN DESAIN YANG MENGIKAT).
 
 Aturan keras:
-- Klaim privasi DIHAPUS, bukan dilemahkan. Jangan bikin pengganti yang "mirip privasi".
-- Tiap baris Capability Matrix harus punya bukti: transactionLink nyata,
-  atau pernyataan bahwa fungsinya tidak ada di ABI.
-- Halaman /proof baca JSON statik ter-commit, bukan API live.
+- Nol string terlarang §3.1 di seluruh UI. Tulis test yang menegakkannya.
+- Tiap baris Capability Matrix WAJIB punya bukti: transactionLink nyata, atau pernyataan
+  eksplisit bahwa fungsinya tidak ada di ABI. Nol baris tanpa bukti.
+- Halaman /proof baca JSON statik ter-commit, bukan API live. Juri menilai 17-20 Agt,
+  transaksi kita 11-12 Agt, dan retensi log KeeperHub free-tier tidak terverifikasi.
+- Video: nol beat menampilkan UI tanpa transaksi di sebelahnya.
 ```
