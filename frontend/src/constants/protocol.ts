@@ -1,0 +1,16 @@
+export const BPS_SCALE = 10_000;
+
+export const LIQUIDATION_BPS = 11_000;
+export const LIQUIDATION_BONUS_BPS = 500;
+
+export const DEFAULT_GUARD_TRIGGER_BPS = 13_000;
+export const MIN_GUARD_TRIGGER_BPS = 12_000;
+export const MAX_GUARD_TRIGGER_BPS = 15_000;
+
+export const DEFAULT_TARGET_RATIO_BPS = 14_500;
+
+export const DEFENCE_WINDOW_BPS = DEFAULT_GUARD_TRIGGER_BPS - LIQUIDATION_BPS;
+
+export const VISUAL_CAP_BPS = 20_000;
+
+export const CENTS_PER_UNIT = 100;
