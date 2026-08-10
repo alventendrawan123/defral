@@ -7,13 +7,17 @@ jobs:
   lint-commits:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
 
       - name: Install dependencies
         working-directory: frontend
