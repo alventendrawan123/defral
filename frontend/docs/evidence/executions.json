@@ -1,0 +1,68 @@
+[
+  {
+    "executionId": "exec-guard-healthy",
+    "attackName": "Repay while the position is healthy",
+    "idempotencyKey": "0x00000000000000000000000000000000000000000000000000000000000000a1",
+    "wouldRevert": true,
+    "revertReason": "Refused_Healthy",
+    "receiptStatus": "reverted",
+    "gasUsed": 24118,
+    "transactionLink": null,
+    "isSponsored": true
+  },
+  {
+    "executionId": "exec-guard-stale-oracle",
+    "attackName": "Act on a stale oracle round",
+    "idempotencyKey": "0x00000000000000000000000000000000000000000000000000000000000000a2",
+    "wouldRevert": true,
+    "revertReason": "Refused_StaleOracle",
+    "receiptStatus": "reverted",
+    "gasUsed": 23904,
+    "transactionLink": null,
+    "isSponsored": true
+  },
+  {
+    "executionId": "exec-guard-repay",
+    "attackName": "Repay while the position is in the defence window",
+    "idempotencyKey": "0x00000000000000000000000000000000000000000000000000000000000000a3",
+    "wouldRevert": false,
+    "revertReason": null,
+    "receiptStatus": "verified",
+    "gasUsed": 118402,
+    "transactionLink": null,
+    "isSponsored": true
+  },
+  {
+    "executionId": "exec-double-fire",
+    "attackName": "Act twice in the same price round",
+    "idempotencyKey": "0x00000000000000000000000000000000000000000000000000000000000000a4",
+    "wouldRevert": true,
+    "revertReason": "Refused_AlreadyActed",
+    "receiptStatus": "reverted",
+    "gasUsed": 23774,
+    "transactionLink": null,
+    "isSponsored": true
+  },
+  {
+    "executionId": "exec-after-revoke",
+    "attackName": "Act after the borrower revokes authority",
+    "idempotencyKey": "0x00000000000000000000000000000000000000000000000000000000000000a5",
+    "wouldRevert": true,
+    "revertReason": "Refused_AgentRevoked",
+    "receiptStatus": "reverted",
+    "gasUsed": 23511,
+    "transactionLink": null,
+    "isSponsored": true
+  },
+  {
+    "executionId": "exec-coupon-sweep",
+    "attackName": "Sweep the coupon into the debt",
+    "idempotencyKey": "0x00000000000000000000000000000000000000000000000000000000000000a6",
+    "wouldRevert": false,
+    "revertReason": null,
+    "receiptStatus": "verified",
+    "gasUsed": 96240,
+    "transactionLink": null,
+    "isSponsored": true
+  }
+]
