@@ -1,0 +1,29 @@
+#!/bin/sh
+
+export PATH="$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+
+secrets=$(printf '%s\n' "$staged" | grep -Ei '(^|/)\.env($|\.)|\.(pem|key|p12|keystore)$|(^|/)(id_rsa|credentials\.json|service-account\.json)$' | grep -v '\.env\.example$' || true)
+if [ -n "$secrets" ]; then
+  echo "pre-commit: refusing to commit a secret file:"
+  printf '  %s\n' $secrets
+  echo "Remove it from the index with: git restore --staged <file>"
+  exit 1
+fi
+
+if ! printf '%s\n' "$staged" | grep -q '^frontend/'; then
+  exit 0
+fi
+
+cd frontend || exit 1
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "pre-commit: node is not on PATH, skipping frontend checks"
+  echo "Run them yourself: cd frontend && bun run lint && bun run type-check && bun run test"
+  exit 1
+fi
+
+./node_modules/.bin/next lint || exit 1
+./node_modules/.bin/tsc --noEmit || exit 1
+./node_modules/.bin/vitest run || exit 1

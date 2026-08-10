@@ -1,0 +1,12 @@
+#!/bin/sh
+
+export PATH="$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+case "$1" in
+  /*) message_file="$1" ;;
+  *)  message_file="$(pwd)/$1" ;;
+esac
+
+cd frontend || exit 1
+
+./node_modules/.bin/commitlint --edit "$message_file"
