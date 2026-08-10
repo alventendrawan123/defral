@@ -1,0 +1,65 @@
+{
+  "probe": "PROBE 2B - independent reproduction of the kill condition, and the salvage path for F2",
+  "date": "2026-08-11",
+  "planRef": "SC/plan.md §0.4, PRD F2",
+  "relatesTo": "docs/evidence/probe-2-revert-broadcast.json",
+  "why": "PROBE 2 concluded KeeperHub refuses to broadcast a call it predicts will revert, which breaks the literal mechanism behind PRD F2. Before rewriting the PRD around that, the finding was reproduced independently, and the remaining question was answered: can a reverted transaction still be put on-chain at all?",
+
+  "partA_reproduction": {
+    "claim": "KeeperHub rejects a guaranteed-revert call pre-broadcast even with simulate:false",
+    "request": {
+      "endpoint": "POST https://app.keeperhub.com/api/execute/contract-call",
+      "body": {
+        "contractAddress": "0x530d16039a39dddd1dac290ee0c7e87af920e45b",
+        "chainId": 84532,
+        "functionName": "boom",
+        "functionArgs": "[]",
+        "simulate": false
+      }
+    },
+    "response": { "httpStatus": 400, "body": { "error": "Contract call failed: Error(PROBE: boom)" } },
+    "onChain": "no executionId, no transactionHash, nothing broadcast",
+    "verdict": "REPRODUCED. PROBE 2 is correct."
+  },
+
+  "partB_salvage": {
+    "question": "If KeeperHub will not broadcast a doomed call, can anyone? A reverted transaction with a real hash is the whole point of F2.",
+    "method": "cast send with an explicit --gas-limit, which skips eth_estimateGas and therefore skips the client-side revert prediction that normally blocks the send",
+    "command": "cast send 0x530d16039a39dddd1dac290ee0c7e87af920e45b \"boom()\" --gas-limit 100000 --rpc-url base_sepolia",
+    "result": {
+      "transactionHash": "0xee86d8586d0dc47b3de6628905bd73218fdad54f2903c369e33095d1195570b4",
+      "transactionLink": "https://sepolia.basescan.org/tx/0xee86d8586d0dc47b3de6628905bd73218fdad54f2903c369e33095d1195570b4",
+      "status": "0x0",
+      "statusMeaning": "REVERTED - mined, permanent, publicly visible",
+      "blockNumber": "0x2b35605",
+      "blockNumberDecimal": 45306885,
+      "gasUsed": "0x537f",
+      "from": "0xe2d3b7fea35ea3b7b8d530cff58a8227ce62bfad",
+      "to": "0x530d16039a39dddd1dac290ee0c7e87af920e45b",
+      "senderNonce": { "before": 13, "after": 14, "meaning": "nonce advanced - the transaction really was broadcast, not simulated" }
+    },
+    "verdict": "CONFIRMED. A reverted transaction CAN be placed on Base Sepolia with a real, permanent hash. The blocker is KeeperHub's pre-broadcast simulation, not the chain and not the contract."
+  },
+
+  "consequenceForF2": {
+    "whatDies": "The claim that KeeperHub itself broadcasts the doomed call. It does not, and three independent execution paths confirm it (PROBE 2 trials A/B/C). Any wording that says 'the agent broadcast a transaction that reverted' is false as executed through KeeperHub.",
+    "whatSurvives": "Everything the evidence is actually for. Restructured into three layers, each independently checkable:",
+    "layer1_agentRefusal": {
+      "source": "KeeperHub run log",
+      "mechanism": "check-and-execute with the guard condition on a healthy position evaluates conditionResult.met=false, executed=false",
+      "proves": "the agent looked, and stood down",
+      "status": "shape already validated by PROBE 3 (zero-arg condition + zero-arg action works end-to-end)"
+    },
+    "layer2_contractRefusal": {
+      "source": "Base Sepolia, via a direct call with an explicit gas limit",
+      "mechanism": "call guardRepay() on a healthy vault; the tx mines with status 0x0 and the Refused_* error in its revert data",
+      "proves": "the contract refuses regardless of who calls it - the guarantee does not depend on the agent behaving",
+      "status": "mechanism proven here on Probe.boom(); repeat on the real vault once deployDemoVault has run"
+    },
+    "layer3_exhaustiveness": {
+      "source": "Foundry suite, 47/47 passing",
+      "proves": "every Refused_* path has a test, so layer 2 is a sample of a proven set, not a lucky screenshot"
+    },
+    "narrativeNote": "This is a stronger submission than the original, not a weaker one: the team probed the platform, found documented behaviour that contradicted their design assumption, published the negative result, and adapted. Present the KeeperHub refusal as the safety property it is - a platform that declines to burn gas on a call it knows will fail - and let the chain-side evidence come from a direct call. Do not paper over which party broadcast what."
+  }
+}

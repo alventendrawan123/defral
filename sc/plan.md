@@ -116,8 +116,15 @@ PUBLISHER_KEY=0x...          # 🔴 TERPISAH — kunci oracle. Agent tidak boleh
 BORROWER_KEY=0x...           # 🔴 TERPISAH — kunci borrower demo
 ETHERSCAN_API_KEY=...
 KEEPERHUB_API_KEY=kh_...
-AGENT_EXECUTOR=0x...         # dari `kh wallet info --json`
+AGENT_EXECUTOR=0x...         # dari GET /api/user/wallet -> walletAddress
 ```
+
+> 🔴 **`AGENT_EXECUTOR` JANGAN diambil dari `kh wallet info --json`.** Perintah itu membaca
+> subOrg berdiri sendiri yang tidak tersambung ke organisasi KeeperHub kita, dan alamatnya
+> tidak pernah mengeksekusi apa pun. Sumber yang benar `GET /api/user/wallet` →
+> `walletAddress`. Nilai ini di-bake sebagai `immutable agentExecutor` di setiap vault —
+> salah isi berarti vault mati permanen. Kejadian beneran waktu setup; lihat
+> `docs/KEEPERHUB-SETUP.md` §1.
 
 > 🔴 **Tiga kunci itu WAJIB terpisah.** Itu yang bikin demo bukan sandiwara, dan itu jawaban pertama kita untuk pertanyaan juri paling mematikan (PRD §17). Kalau publisher dan agent pakai kunci yang sama, seluruh argumen runtuh.
 

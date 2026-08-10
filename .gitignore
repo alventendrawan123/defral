@@ -14,7 +14,11 @@ out/
 # foundry
 cache/
 out/
-broadcast/*/dry-run/
+# Foundry nests as <pkg>/broadcast/<Script>.s.sol/<chainId>/dry-run/. A pattern with an
+# internal slash is anchored to this file's directory, so `broadcast/*/dry-run/` matched
+# nothing at all - it was looking at the repo root, not SC/. Real broadcasts stay tracked:
+# they are the deployment evidence the submission links to.
+**/broadcast/**/dry-run/
 # CATATAN: lib/ TIDAK diabaikan — forge install bikin git submodule, dan
 # pointer submodule-nya harus ter-commit supaya clone bersih bisa build.
 

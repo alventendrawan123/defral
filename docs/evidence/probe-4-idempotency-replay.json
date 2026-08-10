@@ -1,0 +1,31 @@
+{
+  "probe": "PROBE 4 - Idempotency-Key replay (issue #1840 repro)",
+  "date": "2026-08-10",
+  "planRef": "SC/plan.md §0.6",
+  "hypothesis": "replaying the same Idempotency-Key on an identical request returns idempotentReplay:true in the response body instead of re-executing",
+  "trial_A_successful_call_replayed": {
+    "firstCall": {
+      "idempotencyKey": "defral-probe1-bump-001",
+      "response": { "executionId": "sx4oi92zwcmympmxhjl8x", "status": "completed" }
+    },
+    "secondCall_sameKey": {
+      "idempotencyKey": "defral-probe1-bump-001",
+      "response": { "status": "completed", "executionId": "sx4oi92zwcmympmxhjl8x", "idempotentReplay": true }
+    },
+    "result": "idempotentReplay: true present in the body on replay, same executionId returned, function was NOT re-executed on-chain a second time."
+  },
+  "trial_B_rejected_call_replayed": {
+    "firstCall": {
+      "idempotencyKey": "defral-probe2-boom-001",
+      "httpStatus": 400,
+      "response": { "error": "Contract call failed: Error(PROBE: boom)" }
+    },
+    "secondCall_sameKey": {
+      "idempotencyKey": "defral-probe2-boom-001",
+      "httpStatus": 400,
+      "response": { "error": "Contract call failed: Error(PROBE: boom)" }
+    },
+    "result": "No idempotentReplay flag - a request that was rejected pre-broadcast (never got an executionId) is simply re-evaluated fresh each time, not replayed. Consistent with idempotency only applying to accepted executions."
+  },
+  "verdict": "REAL, matches issue #1840's described behavior for successful calls: idempotentReplay:true is present in the JSON body on a genuine replay. Full JSON captured above."
+}

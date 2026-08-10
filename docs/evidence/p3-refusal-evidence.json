@@ -1,0 +1,55 @@
+{
+  "probe": "P3 - refusal evidence: what the contract refuses, and to whom",
+  "date": "2026-08-11",
+  "planRef": "PRD F2, requirement group A (authority)",
+  "supersedes": "the original F2 mechanism, which assumed KeeperHub would broadcast a doomed call. It does not - see docs/evidence/probe-2-revert-broadcast.json.",
+
+  "whatWasAvailable": {
+    "constraint": "guardRepay() is onlyAgent. The only address allowed to call it is the Turnkey EOA, whose key lives in an enclave. KeeperHub, the only party that can sign for that address, refuses to broadcast a call it predicts will revert. So the party that can broadcast will not, and the party that would has no key.",
+    "resolution": "Split the claim in two and prove each with the strongest evidence actually obtainable, rather than forcing one artifact that does not exist."
+  },
+
+  "claim1_theContractRefusesTheAgent": {
+    "assertion": "When the agent asks the vault to defend a position that does not need defending, the vault refuses.",
+    "evidence": "KeeperHub execution records - real executionIds, the contract's own custom errors, decoded, carrying live arguments",
+    "records": [
+      { "executionId": "yjh4l0m4d9jgy7qtt6g6r", "call": "guardRepay()", "error": "Refused_Healthy(16667, 13000)", "reading": "health 16667 was above the borrower's own trigger of 13000" },
+      { "executionId": "fh8e4y796hirzz6woa0pj", "call": "guardRepay()", "error": "Refused_AlreadyActed(2)", "reading": "already acted in oracle round 2 - one defensive action per round" },
+      { "executionId": "1ewhomgsu2j8grqchsule", "call": "sweepCoupon()", "error": "Refused_NoCouponDue", "reading": "no coupon accrued, so there is nothing to sweep" }
+    ],
+    "honestLimit": "These are KeeperHub execution records, NOT mined transactions. There is no BaseScan hash for them, because no transaction was ever broadcast. Say so plainly."
+  },
+
+  "claim2_theContractRefusesEveryoneElse": {
+    "assertion": "Nobody outside the agent can make the vault act - not even the party that owns the entire rest of the system.",
+    "method": "cast send with an explicit --gas-limit, which skips gas estimation and therefore forces the doomed call onto the chain",
+    "caller": "0xe2d3B7FEA35Ea3B7B8d530cfF58a8227ce62BFAD",
+    "callerRole": "deployer of every contract, owner of MockLendingPool, holder of the admin keys - the most privileged address in the system",
+    "target": "0x4f634d7173eFf255973E762c3Fe04DF4887FfB35 (the demo vault)",
+    "transaction": {
+      "hash": "0xb6a01688e55ebb71713a01c02b46318b6a71039bc79e155d1fd90e957700139d",
+      "link": "https://sepolia.basescan.org/tx/0xb6a01688e55ebb71713a01c02b46318b6a71039bc79e155d1fd90e957700139d",
+      "status": "0x0",
+      "statusMeaning": "REVERTED - mined, permanent, publicly checkable",
+      "blockNumber": 45307309,
+      "gasUsed": 21385
+    },
+    "revertData": "0x52f49c95000000000000000000000000e2d3b7fea35ea3b7b8d530cff58a8227ce62bfad",
+    "decoded": "NotAgent(0xe2d3B7FEA35Ea3B7B8d530cfF58a8227ce62BFAD)",
+    "selectorCheck": "cast sig \"NotAgent(address)\" == 0x52f49c95 - matches the first 4 bytes of the revert data",
+    "stateAfter": { "healthBps": 16667, "debt": "6000000000", "note": "unchanged - a reverted transaction moves nothing" },
+    "reading": "This is the strongest form of the authority claim. The person who deployed the system, owns the pool, can mint the tokens and register repayers, still cannot make a borrower's vault move a single unit. The vault answers to exactly one address, and that address is immutable."
+  },
+
+  "claim3_exhaustiveness": {
+    "assertion": "The two refusals above are samples of a proven set, not lucky screenshots.",
+    "evidence": "Foundry suite, 47/47 passing, with a dedicated test behind every Refused_* path and an ABI-surface fuzz test asserting the agent surface is exactly two zero-argument functions.",
+    "command": "cd sc && forge test"
+  },
+
+  "howToPresentThis": {
+    "do": "Say that KeeperHub declines to broadcast calls it predicts will revert - that is a safety property worth pointing at, and finding it is part of the work. Show the execution records for the agent-side refusals and the BaseScan link for the owner-side refusal.",
+    "doNot": "Do not imply the agent's refusals have BaseScan hashes. Do not describe the NotAgent transaction as the agent being refused - it was the deployer being refused, which is a different and equally important claim.",
+    "prdImpact": "PRD F2 still needs rewriting to match this. That is P4, deliberately deferred."
+  }
+}

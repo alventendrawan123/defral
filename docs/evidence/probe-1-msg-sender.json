@@ -1,0 +1,38 @@
+{
+  "probe": "PROBE 1 - msg.sender under KeeperHub gas sponsorship",
+  "date": "2026-08-10",
+  "planRef": "SC/plan.md §0.3",
+  "hypothesis": "docs claim msg.sender at target contract == Turnkey EOA even under sponsorship",
+  "method": "POST /api/execute/contract-call on Probe.bump(), then on-chain cast call lastCaller()",
+  "request": {
+    "endpoint": "https://app.keeperhub.com/api/execute/contract-call",
+    "body": {
+      "contractAddress": "0x530d16039a39dddd1dac290ee0c7e87af920e45b",
+      "chainId": 84532,
+      "functionName": "bump",
+      "functionArgs": "[]",
+      "simulate": false
+    }
+  },
+  "response": {
+    "executionId": "sx4oi92zwcmympmxhjl8x",
+    "status": "completed",
+    "transactionHash": "0x3cb2616d230787bbcb0ee94d74fa480a3c2483e49721720be6300b3b6aa76367",
+    "transactionLink": "https://sepolia.basescan.org/tx/0x3cb2616d230787bbcb0ee94d74fa480a3c2483e49721720be6300b3b6aa76367",
+    "sponsored": true,
+    "receipts": [
+      { "hash": "0x3cb2616d230787bbcb0ee94d74fa480a3c2483e49721720be6300b3b6aa76367", "chainId": 84532, "gasUsed": "127403", "verified": true, "blockNumber": 45306328, "receiptStatus": "success" }
+    ],
+    "topLevelTo": "0x5af5194b4b0909eb978e3cf1e25333852277f07d"
+  },
+  "onChainVerification": {
+    "call": "cast call 0x530d16039a39dddd1dac290ee0c7e87af920e45b \"lastCaller()(address)\" --rpc-url base_sepolia",
+    "result": "0x5515844B92dD96C3298Fd7d62Fb87cEE279F18D3"
+  },
+  "crossCheck": {
+    "endpoint": "GET /api/user",
+    "walletAddress": "0x5515844b92dd96c3298fd7d62fb87cee279f18d3"
+  },
+  "verdict": "CONFIRMED - msg.sender at the target contract equals the Turnkey EOA (lastCaller == /api/user walletAddress), matching KeeperHub docs, even though topLevelTo (the outer relayer) is a different address. Docs correct on this point.",
+  "sideFinding": "SC/.env AGENT_EXECUTOR was stale (0xE36Af70EdD19f112BeefBeF582126af137704050, from a disconnected `keeperhub-wallet info` subOrg). Corrected to 0x5515844B92dD96C3298Fd7d62Fb87cEE279F18D3, the address actually verified above."
+}

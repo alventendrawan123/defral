@@ -1,0 +1,30 @@
+{
+  "probe": "PROBE 3 - does check-and-execute accept a zero-argument condition read and zero-argument action",
+  "date": "2026-08-10",
+  "planRef": "SC/plan.md §0.5",
+  "hypothesis": "guardRepay()/healthRatioBps() being zero-arg is required for check-and-execute to work at all (condition reads can't carry functionArgs)",
+  "request": {
+    "endpoint": "POST /api/execute/check-and-execute",
+    "body": {
+      "contractAddress": "0x530d16039a39dddd1dac290ee0c7e87af920e45b",
+      "chainId": 84532,
+      "functionName": "value",
+      "functionArgs": "[]",
+      "condition": { "operator": "gte", "value": "0" },
+      "action": {
+        "contractAddress": "0x530d16039a39dddd1dac290ee0c7e87af920e45b",
+        "chainId": 84532,
+        "functionName": "bump",
+        "functionArgs": "[]"
+      },
+      "simulate": false
+    }
+  },
+  "response": {
+    "executionId": "5b99dyygpfw4y67e2h755",
+    "status": "completed",
+    "executed": true,
+    "conditionResult": { "met": true, "observedValue": "1", "targetValue": "0", "operator": "gte" }
+  },
+  "verdict": "CONFIRMED. Zero-argument condition read + zero-argument action works cleanly end-to-end through check-and-execute: executed:true, condition evaluated correctly, real execution completed. This validates the core architecture bet behind DefralVault (single vault per borrower so guardRepay()/healthRatioBps() need no arguments)."
+}

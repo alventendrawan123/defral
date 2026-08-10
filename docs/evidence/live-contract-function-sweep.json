@@ -1,0 +1,182 @@
+{
+  "probe": "Live function sweep - every function on every deployed contract",
+  "date": "2026-08-11",
+  "chain": "Base Sepolia (84532)",
+  "method": "cast call / cast send against the deployed addresses, plus KeeperHub Direct Execution for the two onlyAgent functions. Nothing here is a Foundry test - every number was read off the live chain.",
+  "safety": "All state-changing tests ran on the REHEARSAL vault 0x8E11A9a4f43271a37f75AFE6e64746A824A06094. The demo vault 0x4f634d7173eFf255973E762c3Fe04DF4887FfB35 was only read from, plus one deliberately reverted call that changed nothing.",
+
+  "reads": {
+    "total": 80,
+    "reverted": 2,
+    "revertsWereIntentional": [
+      { "call": "pool.healthRatioBps(address with no loan)", "error": "NoSuchLoan(address)", "selector": "0xc49d8707" },
+      { "call": "NavOracle.getRoundData(1)", "error": "OnlyLatestRoundAvailable(uint80,uint80)", "selector": "0x25ad0a4d", "note": "the oracle deliberately serves only the latest round" }
+    ],
+    "crossChecksThatHeld": {
+      "quoteGuardRepayOnHealthy": "returns 0, does not revert - a clean contract for the UI to render",
+      "dUSD.totalSupply": "12112500000 = 6000e6 (demo borrower) + 6000e6 (rehearsal borrower) + 112.5e6 (coupon minted). Every unit accounted for.",
+      "dUSD.balanceOf(pool)": "871120690 = 758620690 (the rehearsal repayment) + 112500000 (the minted coupon). Matches to the unit.",
+      "dUST.balanceOf(pool)": "20000e18 = two positions of 10000e18 - the escrow is real, not bookkeeping",
+      "vault.oracle == pool.priceFeedOf(dUST)": "0x44B94bb5... on both sides - one position, one price (requirement D2)",
+      "COUPON_RATE_BPS": "450 -> 10000e18 collateral * 4.5% / 4 quarters = 112.500000 dUSD, which is exactly what accrued"
+    }
+  },
+
+  "authorityTests": {
+    "total": 31,
+    "passed": 31,
+    "failed": 0,
+    "note": "Each is a cast call with --from set to a specific actor, asserting the exact custom-error selector. Expected selectors are computed with `cast sig`, not hardcoded.",
+    "groups": {
+      "A_agentSurface": [
+        "guardRepay by deployer (owns every other contract) -> NotAgent",
+        "guardRepay by the borrower themselves -> NotAgent",
+        "guardRepay by the NAV publisher -> NotAgent",
+        "sweepCoupon by deployer -> NotAgent",
+        "sweepCoupon by the borrower -> NotAgent"
+      ],
+      "B_borrowerControls": [
+        "setPolicy by deployer -> NotBorrower",
+        "setPolicy by the AGENT -> NotBorrower (the agent cannot widen its own mandate)",
+        "revokeAgent by deployer -> NotBorrower",
+        "revokeAgent by the agent -> NotBorrower (the agent cannot protect itself from revocation)",
+        "setPolicy trigger 11999 -> InvalidTriggerBps",
+        "setPolicy trigger 15001 -> InvalidTriggerBps",
+        "setPolicy target below trigger -> InvalidTargetBps",
+        "setPolicy maxRepay 0 -> InvalidMaxRepayPerEvent"
+      ],
+      "C_pool": [
+        "registerRepayer / allowCollateral / accrueQuarterlyCoupon by non-owner -> NotOwner",
+        "applyRepayment / applyCouponSweep by non-repayer -> NotAuthorizedRepayer",
+        "withdrawCollateral while debt outstanding -> DebtOutstanding",
+        "liquidate a position at 16667 bps -> NotLiquidatable",
+        "setPriceFeed a second time -> PriceFeedAlreadySet (write-once holds on-chain)",
+        "openPosition when a loan exists -> LoanAlreadyExists"
+      ],
+      "D_factory": [
+        "deployVault twice for one borrower -> VaultAlreadyExists",
+        "deployVault with unregistered collateral -> CollateralNotRegistered",
+        "deployVault pointing a dUST position at the mXAU feed -> OracleMismatch",
+        "deployVault with trigger below MIN -> InvalidTriggerBps"
+      ],
+      "E_oracle": [
+        "setPrice by deployer -> NotPublisher",
+        "setPrice by the AGENT -> NotPublisher   <- this is the thesis, on-chain",
+        "transferPublisher by deployer -> NotPublisher",
+        "setPrice(0) by the real publisher -> InvalidPrice",
+        "getRoundData on a historical round -> OnlyLatestRoundAvailable"
+      ]
+    }
+  },
+
+  "stateChangingTests": [
+    {
+      "test": "setPolicy by the borrower",
+      "tx": "0xf6c3763af5129812bf8b22e59ec9ae7e46e19f78e2248bcaa0bd95b2d4e196cc",
+      "result": "policy moved to 12500/14000/1000e6/false, then restored to 13000/14500/2000e6/true (tx 0xc250f7d6e7468db93191fe0f88fe78eb8ce8d72fca4b69816254242aad3b6893)"
+    },
+    {
+      "test": "issuer accrues a quarterly coupon",
+      "tx": "0x11a3fae4648217f38fa3b257116d4fbaedc118b68121f1b9b382c7999ab8544b",
+      "result": "pendingCoupon 0 -> 112500000, and dUSD was minted to back it. couponDue() on the vault reads the same number."
+    },
+    {
+      "test": "openGracePeriod",
+      "tx": "0x74cab332afd178a7a9390906494d96fa6dbcb15b08bbf8f4b766ebdcbd2f1ea2",
+      "result": "graceExpiry set to 1786388738 (1h ahead of block time 1786385160)"
+    },
+    {
+      "test": "sweepCoupon via KeeperHub",
+      "executionId": "34evm46bd6wcpvtg1lkwa",
+      "result": "debt 5241379310 -> 5128879310 (exactly PRD 5128.88). pendingCoupon -> 0. graceExpiry -> 0, cleared automatically because the position came back healthy."
+    },
+    {
+      "test": "sweepCoupon AGAIN, immediately - the replay bound",
+      "executionId": "l280jtb9vhbwuoqrnpl4i",
+      "result": "Refused_NoCouponDue. debt unchanged at 5128879310.",
+      "significance": "This is the critical bug found during audit, now proven dead on the deployed contract. Before the fix, couponDue() was a pure function of collateralAmount and never decreased, so this call would have succeeded - 46 more of them would have erased the entire debt with no tokens moving."
+    },
+    {
+      "test": "revokeAgent - permanent, one-way",
+      "tx": "0xd3a9ab39b47b27cec4ea6c54ab15f637ceedb9380bc21795ee21940c3e3394f0",
+      "result": "revoked() -> true. guardRepay() and sweepCoupon() from the agent now both revert Refused_AgentRevoked (0x0951234f). There is no un-revoke.",
+      "significance": "The borrower's kill switch works on-chain. The rehearsal vault is now permanently disarmed, which is why this test ran last."
+    }
+  ],
+
+  "destructiveTests": {
+    "note": "Initially skipped as too risky, then run in full on a THIRD, sacrificial position. The trick was collateral choice: the victim position was collateralised in mXAU, which has its own NavOracle (0x16c683d9...). Dropping the mXAU NAV never touches the dUST feed, so the demo position stayed at 16667 bps the entire time and was never exposed to a passing liquidator.",
+
+    "liquidate": {
+      "setup": "publisher address opened a 10000e18 mXAU / 6000e6 dUSD position (16667 bps), deployer funded itself with dUSD and approved the pool as liquidator",
+      "step1_graceDelays": {
+        "action": "openGracePeriod(victim, 300) then liquidate",
+        "result": "reverted GraceStillOpen(0xcb6268b5)",
+        "reading": "an open grace window delays liquidation of an already-unhealthy position"
+      },
+      "step2_priceDrop": { "call": "NavOracle(mXAU).setPrice(65000000)", "victimHealth": 10833, "demoHealth": 16667, "reading": "below LIQUIDATION_BPS 11000, and the demo position is untouched because it prices off a different feed" },
+      "step3_liquidation": {
+        "txHash": "0xcd1fb3446ee5c481974d1a7a62cdbd4678fc876c0d1e368b76cd9493cacea890",
+        "status": "0x1",
+        "liquidatorPaid": "6000000000 dUSD",
+        "liquidatorReceived": "9692307692307692307691 mXAU",
+        "victimRefunded": "307692307692307692309 mXAU",
+        "sum": "10000000000000000000000 - exactly the pledged collateral, to the wei",
+        "victimDebtAfter": 0,
+        "victimCollateralAfter": 0,
+        "poolCollateralAfter": 0,
+        "eventHealthBps": "0x2a51 = 10833"
+      },
+      "arithmeticCheck": "owedUnits = 6000 / 0.65 = 9230.769230..., seized = owedUnits * 1.05 = 9692.307692..., refund = 10000 - seized = 307.692307.... Matches the on-chain numbers exactly.",
+      "significance": "The predecessor system's seizure step was `pure ()` and never moved a token. This one moves 9692 units of collateral to the liquidator and refunds the remainder to the borrower, in one transaction, callable by anyone."
+    },
+
+    "withdrawCollateral_success": {
+      "setup": "on the rehearsal position: registerRepayer(deployer), then applyRepayment(deployer, 5128879310) to clear the debt",
+      "txs": [
+        "0x8d51fae03eba5f2203c3c0e984213aa5822119b2663f15786dc266895a478b61 registerRepayer",
+        "0x94e4965886346f7b3d47cb435302d48458b7f63f91ae2d2eb5546e9141ba4d52 applyRepayment",
+        "0x108ade3a30f4aa6ef18bc53ab8545e7786c3832c36ad4edccfb1659bfca7b4b1 withdrawCollateral"
+      ],
+      "result": "debt 5128879310 -> 0, then 10000e18 dUST released back to the borrower, collateralOf -> 0",
+      "reading": "collateral is escrowed, not confiscated - once the debt is gone the borrower takes it back"
+    },
+
+    "transferPublisher_success": {
+      "target": "the mXAU oracle only - the dUST feed the demo depends on was never touched",
+      "sequence": [
+        "publisher -> deployer (tx 0xebd41e9f5a062662126953322be0635ac17883fcd91ce1d2da7d261fde9c8d08)",
+        "new publisher pushed $0.99 successfully (tx 0x20ed85f0cf7d902f9c72c8bd497a48ece03cf800c4271472c8944df637469ea1)",
+        "deployer -> publisher, restored",
+        "price restored to $1.00"
+      ],
+      "finalState": { "mXAU.publisher": "0x104bd087D5e4767370D8569A32B2DD986c3b1c4A", "mXAU.answer": "100000000", "dUST.publisher": "0x104bd087D5e4767370D8569A32B2DD986c3b1c4A", "dUST.answer": "100000000" },
+      "incidentNote": "The restore transaction first failed with 'nonce too low' (a race between two sends from the same key), leaving the deployer holding the mXAU publisher role for a few blocks. Caught on the next read and restored. No demo dependency was affected, since the demo prices off dUST."
+    },
+
+    "allowCollateral_and_setPriceFeed_firstWrite": {
+      "txs": [
+        "0x60cb545411886b82c7b7463619a07f76907bcb44df548136534e18f51f3eaf97 allowCollateral(0x...bEEF, 'tTST', 18, false)",
+        "0x363327db685184bd4afa238a1e22a2eb25590969e701b03b0e39f59c3ee66b4e setPriceFeed first write"
+      ],
+      "result": "collateralInfo -> (true, false, 18, 'tTST', 0x16c683d9...), and a SECOND setPriceFeed on the same token reverts PriceFeedAlreadySet (0x5e3b8265)",
+      "reading": "write-once is enforced per token, not globally - a new instrument can still be registered, but an existing one can never be repointed"
+    }
+  },
+
+  "coverageSummary": {
+    "everyFunctionOnEveryDeployedContract": "exercised - reads, authority refusals, and success paths",
+    "onlyPathsNotRunLive": "none",
+    "residue": "0x...bEEF is registered as a collateral instrument named tTST pointing at the mXAU feed. It is inert - no position can be opened against it because the token address holds no ERC20 code. Harmless, but it is in the pool's registry and should be mentioned rather than hidden."
+  },
+
+  "demoVaultAfterAllThis": {
+    "address": "0x4f634d7173eFf255973E762c3Fe04DF4887FfB35",
+    "healthBps": 16667,
+    "debt": "6000000000",
+    "couponDue": "112500000",
+    "lastActedRound": 0,
+    "revoked": false,
+    "note": "Untouched. Never acted on. Ready for one clean recorded run."
+  }
+}

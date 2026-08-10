@@ -1,0 +1,59 @@
+{
+  "event": "Demo position + borrower vault - Base Sepolia (84532)",
+  "date": "2026-08-11",
+  "planRef": "SC/plan.md §0.0 / §11, PRD Appendix B",
+  "continues": "docs/evidence/deploy-core-2026-08-10.json",
+
+  "stage2_openDemoPosition": {
+    "script": "forge script script/Deploy.s.sol:Deploy --sig \"openDemoPosition(address,address)\" <dUST> <pool> --rpc-url base_sepolia --broadcast --slow",
+    "transactions": [
+      { "function": "dUST.mint(borrower, 10_000e18)", "hash": "0xb260c153ded72cfe54eecb54f6e257c58c77da20dc4381c8b2bc89d4c594d653" },
+      { "function": "dUST.approve(pool, 10_000e18)", "hash": "0x79854e0671cf770fb58e08631ff1d096c6ad2e6cf0dc9605b2a8c938e23758e0" },
+      { "function": "pool.openPosition(borrower, dUST, 10_000e18, 6_000e6)", "hash": "0x1313d0722b5ae569bcad2ae7a59b05e1de72ea89992ab95a1babb0d7dba52b26" }
+    ]
+  },
+
+  "stage3_deployDemoVault": {
+    "script": "forge script script/Deploy.s.sol:Deploy --sig \"deployDemoVault(address,address,address,address)\" <dUSD> <dUST> <pool> <factory> --rpc-url base_sepolia --broadcast --slow",
+    "transactions": [
+      { "function": "factory.deployVault(...)", "hash": "0xf68d0e1fa24f4d5363d0f8d5f6bc8eecb6183616e31141a65a0640f35debbe06" },
+      { "function": "pool.registerRepayer(vault)", "hash": "0xc20d26a52ef1358858d6c664df34404b2de4d75e333f67c934e1e1f0f8efbdc7" },
+      { "function": "dUSD.approve(vault, 3_000e6)", "hash": "0xf7b2d64d8f0138f7315af30822de81a77df5dd359bb24a82c8783c7d748ab31c" },
+      { "function": "pool.accrueQuarterlyCoupon(borrower)", "hash": "0xf944569b001037715580573086b50de4939ccb362bb246b898127340e0f44dc4" }
+    ]
+  },
+
+  "vault": {
+    "address": "0x4f634d7173eFf255973E762c3Fe04DF4887FfB35",
+    "explorer": "https://sepolia.basescan.org/address/0x4f634d7173eff255973e762c3fe04df4887ffb35",
+    "verified": true,
+    "verificationNote": "verified with forge verify-contract; source readable on BaseScan"
+  },
+
+  "onChainState": {
+    "note": "every value below was read back with cast call after deployment, not taken from script output",
+    "vault.agentExecutor()": "0x5515844B92dD96C3298Fd7d62Fb87cEE279F18D3",
+    "vault.borrower()": "0x0a25a241Ad0c397136dE68ccF2D9fC1EC68Dc7f2",
+    "factory.vaultOf(borrower)": "0x4f634d7173eFf255973E762c3Fe04DF4887FfB35",
+    "vault.reserve()": "3000000000",
+    "vault.couponDue()": "112500000",
+    "pool.couponDue(borrower)": "112500000",
+    "pool.healthRatioBps(borrower)": 16667,
+    "pool.debtOf(borrower)": "6000000000",
+    "pool.collateralOf(borrower)": "10000000000000000000000",
+    "pool.isRepayer(vault)": true
+  },
+
+  "checksThatMatter": {
+    "agentExecutorMatchesEmpiricalSender": "vault.agentExecutor() equals the address PROBE 1 proved is msg.sender at the target contract under KeeperHub execution (lastCaller() on Probe.sol). This field is immutable - a mismatch would have made the vault permanently unusable, and an earlier stale value (0xE36Af70E..., from a disconnected keeperhub-wallet subOrg) was caught and corrected before this deploy.",
+    "healthMatchesPRD": "16667 bps at $1.00 par is exactly the PRD Appendix B opening number.",
+    "couponIsAccruedState": "couponDue() reads 112500000 (112.50 dUSD) from pendingCoupon, not from a formula. It goes to zero after one sweep and only refills on the next accrueQuarterlyCoupon - this is the bound that makes sweepCoupon() non-repeatable.",
+    "reserveIsNonCustodial": "3000e6 is min(borrower dUSD balance, allowance to vault). The vault holds no borrower funds; revoking the approval alone disarms it."
+  },
+
+  "notYetDone": [
+    "No price dip pushed yet - publisher nonce is still 0, so the guard path has never fired on a live position.",
+    "No workflow registered on KeeperHub yet.",
+    "Layer-2 F2 evidence (an on-chain reverted guardRepay from the agent) is still open - see docs/evidence/probe-2b-revert-salvage.json for why it cannot come from KeeperHub and what the alternatives are."
+  ]
+}

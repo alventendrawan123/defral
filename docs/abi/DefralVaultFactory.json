@@ -1,0 +1,195 @@
+﻿[
+    {
+        "type":  "constructor",
+        "inputs":  [
+                       {
+                           "name":  "dUSD_",
+                           "type":  "address",
+                           "internalType":  "contract IERC20"
+                       },
+                       {
+                           "name":  "pool_",
+                           "type":  "address",
+                           "internalType":  "contract IDefralPool"
+                       }
+                   ],
+        "stateMutability":  "nonpayable"
+    },
+    {
+        "type":  "function",
+        "name":  "dUSD",
+        "inputs":  [
+
+                   ],
+        "outputs":  [
+                        {
+                            "name":  "",
+                            "type":  "address",
+                            "internalType":  "contract IERC20"
+                        }
+                    ],
+        "stateMutability":  "view"
+    },
+    {
+        "type":  "function",
+        "name":  "deployVault",
+        "inputs":  [
+                       {
+                           "name":  "agentExecutor",
+                           "type":  "address",
+                           "internalType":  "address"
+                       },
+                       {
+                           "name":  "collateralToken",
+                           "type":  "address",
+                           "internalType":  "contract IERC20"
+                       },
+                       {
+                           "name":  "oracle",
+                           "type":  "address",
+                           "internalType":  "contract AggregatorV3Interface"
+                       },
+                       {
+                           "name":  "triggerBps",
+                           "type":  "uint16",
+                           "internalType":  "uint16"
+                       },
+                       {
+                           "name":  "targetBps",
+                           "type":  "uint16",
+                           "internalType":  "uint16"
+                       },
+                       {
+                           "name":  "maxRepayPerEvent",
+                           "type":  "uint256",
+                           "internalType":  "uint256"
+                       },
+                       {
+                           "name":  "couponSweep",
+                           "type":  "bool",
+                           "internalType":  "bool"
+                       }
+                   ],
+        "outputs":  [
+                        {
+                            "name":  "vault",
+                            "type":  "address",
+                            "internalType":  "address"
+                        }
+                    ],
+        "stateMutability":  "nonpayable"
+    },
+    {
+        "type":  "function",
+        "name":  "pool",
+        "inputs":  [
+
+                   ],
+        "outputs":  [
+                        {
+                            "name":  "",
+                            "type":  "address",
+                            "internalType":  "contract IDefralPool"
+                        }
+                    ],
+        "stateMutability":  "view"
+    },
+    {
+        "type":  "function",
+        "name":  "vaultOf",
+        "inputs":  [
+                       {
+                           "name":  "",
+                           "type":  "address",
+                           "internalType":  "address"
+                       }
+                   ],
+        "outputs":  [
+                        {
+                            "name":  "",
+                            "type":  "address",
+                            "internalType":  "address"
+                        }
+                    ],
+        "stateMutability":  "view"
+    },
+    {
+        "type":  "event",
+        "name":  "VaultDeployed",
+        "inputs":  [
+                       {
+                           "name":  "borrower",
+                           "type":  "address",
+                           "indexed":  true,
+                           "internalType":  "address"
+                       },
+                       {
+                           "name":  "vault",
+                           "type":  "address",
+                           "indexed":  true,
+                           "internalType":  "address"
+                       },
+                       {
+                           "name":  "collateralToken",
+                           "type":  "address",
+                           "indexed":  true,
+                           "internalType":  "address"
+                       }
+                   ],
+        "anonymous":  false
+    },
+    {
+        "type":  "error",
+        "name":  "CollateralNotRegistered",
+        "inputs":  [
+                       {
+                           "name":  "collateralToken",
+                           "type":  "address",
+                           "internalType":  "address"
+                       }
+                   ]
+    },
+    {
+        "type":  "error",
+        "name":  "NotBorrower",
+        "inputs":  [
+                       {
+                           "name":  "caller",
+                           "type":  "address",
+                           "internalType":  "address"
+                       }
+                   ]
+    },
+    {
+        "type":  "error",
+        "name":  "OracleMismatch",
+        "inputs":  [
+                       {
+                           "name":  "expected",
+                           "type":  "address",
+                           "internalType":  "address"
+                       },
+                       {
+                           "name":  "supplied",
+                           "type":  "address",
+                           "internalType":  "address"
+                       }
+                   ]
+    },
+    {
+        "type":  "error",
+        "name":  "VaultAlreadyExists",
+        "inputs":  [
+                       {
+                           "name":  "borrower",
+                           "type":  "address",
+                           "internalType":  "address"
+                       },
+                       {
+                           "name":  "existingVault",
+                           "type":  "address",
+                           "internalType":  "address"
+                       }
+                   ]
+    }
+]

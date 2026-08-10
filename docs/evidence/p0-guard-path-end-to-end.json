@@ -1,0 +1,95 @@
+{
+  "probe": "P0 - the guard path, end to end through KeeperHub, on a live position",
+  "date": "2026-08-11",
+  "planRef": "PRD §4 (thesis), F2 (evidence), Appendix B (numbers)",
+  "why": "Everything else was either unit-tested or probed on a toy contract. This is the first time the real DefralVault was driven by KeeperHub against a real position on Base Sepolia. If this did not work, the submission had no demo.",
+
+  "rig": {
+    "note": "A SECOND position was used, not the demo one. guardRepay permanently reduces debt and there is no way to raise it again (openPosition reverts with LoanAlreadyExists), so rehearsing on the demo vault would have burned it.",
+    "borrower": "0xe2d3B7FEA35Ea3B7B8d530cfF58a8227ce62BFAD (the deployer, acting as a second borrower)",
+    "vault": "0x8E11A9a4f43271a37f75AFE6e64746A824A06094",
+    "agentExecutor": "0x5515844B92dD96C3298Fd7d62Fb87cEE279F18D3",
+    "policy": { "triggerBps": 13000, "targetBps": 14500, "maxRepayPerEvent": "2000000000", "couponSweep": true },
+    "opening": { "collateral": "10000e18 dUST", "debt": "6000e6 dUSD", "healthBps": 16667, "reserve": "3000e6" }
+  },
+
+  "step1_refusalWhileHealthy": {
+    "request": "POST /api/execute/contract-call  { contractAddress: vault, functionName: 'guardRepay', functionArgs: '[]', simulate: false }",
+    "httpStatus": 202,
+    "response": { "executionId": "yjh4l0m4d9jgy7qtt6g6r", "status": "failed", "error": "Contract call failed: Refused_Healthy(16667, 13000)" },
+    "reading": "The agent was told to defend a position that did not need defending. The contract refused, and KeeperHub returned the contract's OWN custom error, decoded, carrying the live health (16667) and the borrower's own trigger (13000). This is a real execution record with an executionId, not a client-side rejection.",
+    "contrastWithProbe2": "PROBE 2 saw HTTP 400 with no executionId for Probe.boom(). Here a custom-error revert on a verified contract produced HTTP 202 + executionId + status:'failed'. The two are not the same code path - worth noting in TEARDOWN.md, it partially softens PROBE 2's conclusion."
+  },
+
+  "step2_priceDip": {
+    "actor": "PUBLISHER_KEY - a key the agent does not hold and cannot obtain",
+    "call": "NavOracle(dUST).setPrice(76000000)   // $0.76, 8dp",
+    "txHash": "0x0c5d973d35b274c90534bf8d345929ed376e836ef62d10c6ec3261d2064ce051",
+    "effect": { "healthBps": 12667, "belowTrigger": true, "quoteGuardRepay": "758620690" },
+    "note": "quoteGuardRepay() predicted 758.620690 dUSD BEFORE the agent moved. Requirement D2 says the contract, the agent and the UI must all read the same number; this is the contract's own prediction, checked against what actually moved in step 3."
+  },
+
+  "step3_guardRepayExecuted": {
+    "request": "POST /api/execute/contract-call  { contractAddress: vault, functionName: 'guardRepay', functionArgs: '[]', simulate: false }, Idempotency-Key: defral-p0-guard-001",
+    "httpStatus": 202,
+    "response": { "executionId": "buxszjcotqofnaz5ixo7h", "status": "completed" },
+    "transaction": {
+      "hash": "0xb8f47a89115841e5d0176fd6cd3a0d8d9ec1141baaafde37c4ad11afb3a46c9e",
+      "link": "https://sepolia.basescan.org/tx/0xb8f47a89115841e5d0176fd6cd3a0d8d9ec1141baaafde37c4ad11afb3a46c9e",
+      "status": "0x1",
+      "blockNumber": 45307067,
+      "gasUsed": 132484,
+      "from": "0xdcf4bac4bd805948168ff63483bc493894a29613",
+      "to": "0x5af5194b4b0909eb978e3cf1e25333852277f07d",
+      "sponsorship": "from/to are KeeperHub's relayer and entrypoint, identical to PROBE 1. Neither the borrower nor the agent EOA paid gas, and the agent EOA nonce stayed at 1 - the account is delegated (EIP-7702), not directly transacting."
+    },
+    "stateAfter": {
+      "healthBps": 14500,
+      "debt": "5241379310",
+      "reserveRemaining": "2241379310",
+      "lastActedRound": 2
+    },
+    "arithmeticCheck": {
+      "repaid": "6000000000 - 5241379310 = 758620690",
+      "matchesQuote": true,
+      "healthLandedExactlyOnTarget": "14500 == targetBps, not approximately",
+      "reserveDrop": "3000000000 - 2241379310 = 758620690, identical - the money came from the borrower's own wallet via allowance, the vault never custodied it"
+    }
+  },
+
+  "step4_refusalsAfterActing": [
+    {
+      "call": "guardRepay() again, same oracle round",
+      "executionId": "fh8e4y796hirzz6woa0pj",
+      "error": "Refused_AlreadyActed(2)",
+      "reading": "The round guard fired. One defensive action per oracle round, so a stuck or repeated trigger cannot drain the reserve."
+    },
+    {
+      "call": "sweepCoupon() with nothing accrued for this borrower",
+      "executionId": "1ewhomgsu2j8grqchsule",
+      "error": "Refused_NoCouponDue",
+      "reading": "Coupon is accrued state, not a formula. With no accrual there is nothing to sweep, and the agent is told so rather than being allowed to reduce debt out of thin air."
+    }
+  ],
+
+  "verdict": "CONFIRMED end to end. Every number in PRD Appendix B reproduced on-chain: 16667 -> 12667 -> 758.620690 repaid -> 5241.379310 outstanding -> 14500. The agent's two zero-argument functions were driven by KeeperHub Direct Execution against the real contract, gas fully sponsored, with the borrower's funds never leaving the borrower's wallet until the moment of repayment.",
+
+  "evidenceForF2": {
+    "note": "F2 asked for deliberately-broadcast rejection transactions. PROBE 2 showed KeeperHub will not broadcast a doomed call. What this run produced instead is arguably better and is entirely truthful:",
+    "records": [
+      "3 KeeperHub execution records whose error field names the contract's own revert reason, twice with live arguments: Refused_Healthy(16667, 13000), Refused_AlreadyActed(2), Refused_NoCouponDue",
+      "1 execution record and 1 on-chain transaction for the successful defence"
+    ],
+    "whatToSay": "Say plainly that the refusals are KeeperHub execution records, not mined transactions, and that KeeperHub declines to broadcast a call it predicts will revert. Do not imply a BaseScan hash exists for the refusals. The successful defence does have one."
+  },
+
+  "demoPositionUntouched": {
+    "borrower": "0x0a25a241Ad0c397136dE68ccF2D9fC1EC68Dc7f2",
+    "vault": "0x4f634d7173eFf255973E762c3Fe04DF4887FfB35",
+    "healthBps": 16667,
+    "debt": "6000000000",
+    "couponDue": "112500000",
+    "priceRestored": { "call": "setPrice(100000000)", "txHash": "0x0c1b04f8e1842c7cb3caf89904ebb2ca359359b30485949b69c804b00112d9f6" },
+    "note": "The demo vault has never been acted on. It is at par, coupon unswept, ready for a single clean recorded run."
+  }
+}

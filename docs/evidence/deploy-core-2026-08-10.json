@@ -1,0 +1,19 @@
+{
+  "event": "Core system deploy - Base Sepolia (84532)",
+  "date": "2026-08-10",
+  "planRef": "SC/plan.md §0.0 / §0.7",
+  "script": "forge script script/Deploy.s.sol:Deploy --rpc-url base_sepolia --broadcast --verify",
+  "contracts": {
+    "Probe": { "address": "0x530d16039a39dddd1dac290ee0c7e87af920e45b", "txHash": "0xdbd0a512bffde483499ddb4dda151b24bfbe04a13c89c6c1f59a843b2bb6eca3", "verified": true },
+    "MockUSD (dUSD)": { "address": "0x9d9734fbb490b603a27f82ec0e23cdfdd9d6b838", "txHash": "0xa322abcbe9c23c7ee658e7f7499f371188c1289c33c4b36a111005808e93a649", "verified": true },
+    "MockTreasury (dUST)": { "address": "0x0a72124d5e606ab4264a653b6942738cbabd2d43", "txHash": "0x7556b6441da4d477f9e4af84b6fd2e9ebcf3da74c8ee74ec0d33cd9a9c6ce369", "verified": true, "yieldBearing": true },
+    "MockTreasury (mXAU)": { "address": "0x8b45b4842b70031c1a43f129484a6d4e0f69454d", "txHash": "0xe1ffb84214b22772c15d43425861e0d87a3e4d7594989d2dd2feaacaa7cadf07", "verified": true, "yieldBearing": false },
+    "NavOracle (dUST feed)": { "address": "0x44b94bb593f6de51ad3385264c0168eec8e56392", "txHash": "0xa69040bedc2bbbf29c4aa1d8203f5630396273f0682f78caf15b7081aa774c1b", "verified": true, "initialPrice": "1.00" },
+    "NavOracle (mXAU feed)": { "address": "0x16c683d93e6a49b6e444e4c6b2bce218b934ae11", "txHash": "0x972f7f0826551e3bf340fd2a8fc5c824cedcf2431e461f50806aa1074845f5c1", "verified": true, "initialPrice": "1.00" },
+    "MockLendingPool": { "address": "0x35371ed6e29dde1fde4dbe8a6048ffb0c860b9ed", "txHash": "0x622f1a0d5d4a37e8e9a6019465f1fb7d6652e86906cafae31dda92be04db1884", "verified": true },
+    "DefralVaultFactory": { "address": "0x1cbb29944ecfe0c5d8961f31bec296504615ac19", "txHash": "0xf6443dbf8ad1e79453cf63b58abe022efd06fff3885ace2a8e7604aca7cd48ba", "verified": true }
+  },
+  "explorer": "https://sepolia.basescan.org/address/",
+  "agentExecutor": "0x5515844B92dD96C3298Fd7d62Fb87cEE279F18D3",
+  "note": "DefralVault instances not yet deployed - one gets deployed per borrower via DefralVaultFactory.deployVault(), pending demo position setup."
+}

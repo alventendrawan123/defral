@@ -1,0 +1,59 @@
+{
+  "probe": "PROBE 2 - does KeeperHub broadcast a transaction it predicts will revert",
+  "date": "2026-08-10",
+  "planRef": "SC/plan.md §0.4 (kill-condition)",
+  "hypothesis": "simulate:false should broadcast even a guaranteed-revert call, giving the demo a real tx hash for negative-control evidence",
+  "trial_A_contract_call": {
+    "endpoint": "POST /api/execute/contract-call",
+    "body": {
+      "contractAddress": "0x530d16039a39dddd1dac290ee0c7e87af920e45b",
+      "chainId": 84532,
+      "functionName": "boom",
+      "functionArgs": "[]",
+      "simulate": false
+    },
+    "httpStatus": 400,
+    "response": { "error": "Contract call failed: Error(PROBE: boom)" },
+    "result": "NOT broadcast. No executionId, no transactionHash, nothing on-chain."
+  },
+  "trial_B_check_and_execute": {
+    "endpoint": "POST /api/execute/check-and-execute",
+    "body": {
+      "contractAddress": "0x530d16039a39dddd1dac290ee0c7e87af920e45b",
+      "chainId": 84532,
+      "functionName": "value",
+      "condition": { "operator": "gte", "value": "0" },
+      "action": {
+        "contractAddress": "0x530d16039a39dddd1dac290ee0c7e87af920e45b",
+        "chainId": 84532,
+        "functionName": "boom",
+        "functionArgs": "[]"
+      },
+      "simulate": false
+    },
+    "httpStatus": 400,
+    "response": { "error": "Contract call failed: Error(PROBE: boom)" },
+    "result": "Condition passed (value() >= 0 is trivially true), but the ACTION leg was still pre-simulated and rejected before broadcast. No executionId, no transactionHash."
+  },
+  "trial_C_node_write_contract": {
+    "endpoint": "POST /api/execute/node",
+    "note": "actionType catalog reverse-engineered by brute-checking plausible <plugin>/<kebab-case-node> strings (docs did not enumerate them). Confirmed valid: code/run-code, web3/approve-token, web3/transfer-token, web3/read-contract, web3/write-contract. This is the workflow-node action-config schema (abiFunction, not functionName - matches plan.md's documented issue #1927 gotcha), distinct from the Direct Execution REST schema.",
+    "attempt_1_unfunded": {
+      "body": { "chainId": 84532, "actionType": "web3/write-contract", "config": { "network": "84532", "contractAddress": "0x530d16039a39dddd1dac290ee0c7e87af920e45b", "abiFunction": "boom", "functionArgs": "[]" } },
+      "response": { "executionId": "4flc3t3bu9x4jo2fwis2s", "status": "failed", "error": "Insufficient BASE balance. Have: 0.0, Need: 0.000000231. Fund 0x5515844b92dd96c3298fd7d62fb87cee279f18d3 with at least 0.000000231 BASE on this chain and retry." },
+      "finding": "This path is NOT gas-sponsored (unlike Direct Execution contract-call/check-and-execute) - it requires the agent EOA to hold native gas itself. Also notable: it got PAST revert-prediction to a funding check, unlike trial A/B which rejected boom() immediately."
+    },
+    "fundingTx": {
+      "action": "sent 0.00005 ETH from the deployer wallet to the agent wallet (0x5515844b92dd96c3298fd7d62fb87cee279f18d3) on Base Sepolia to unblock the test",
+      "txHash": "0x0c9078b41e084735fc0cba1bc03f82f5700728124d0d7736e45e803b058ba6da"
+    },
+    "attempt_2_funded": {
+      "response": { "executionId": "sij8m7atlbyzloz3of3th", "status": "failed", "transactionHash": null, "sponsored": false, "receipts": [], "error": "Contract call failed: Error(PROBE: boom)" },
+      "onChainCheck": { "call": "cast nonce 0x5515844b92dd96c3298fd7d62fb87cee279f18d3 --rpc-url base_sepolia", "before": 1, "after": 1, "meaning": "nonce did not advance - no transaction was broadcast" },
+      "finding": "Once funded, still pre-simulated and rejected before broadcast, identical failure mode to trial A/B. transactionHash is explicitly null in the status response."
+    }
+  },
+  "verdict": "KILL CONDITION HIT, and now broadly confirmed. Three independent execution paths tested - Direct Execution contract-call, check-and-execute's action leg, and the node/web3-write-contract action (the same schema real workflow action nodes use) - all three refuse to broadcast a call they predict will revert. simulate:false and having real gas in the signer wallet both make no difference. This looks like platform-wide behavior, not a quirk of one endpoint.",
+  "impact": "Breaks the literal mechanism behind PRD F2 ('>=2 deliberately-broadcast REJECTION transactions, verified') and the write-up's central evidentiary claim ('agent tries, chain refuses, transaction has a hash'), AS EXECUTED THROUGH KEEPERHUB SPECIFICALLY (Direct Execution or a workflow action node with this same actionType). The underlying claim ('the contract itself refuses on a healthy position') is still real and independently provable by any caller (see Foundry test suite: every Refused_* error has a passing test) - what breaks is specifically getting KeeperHub to be the one broadcasting a doomed call and producing the tx hash.",
+  "remainingUntested": "A real event-triggered workflow (W1 guard, Event trigger -> AnswerUpdated) has not been built and fired live. It's plausible - though now less likely given trial C uses the same underlying action schema - that a genuine workflow run behaves differently from calling the node action directly via REST. This is the one avenue left before concluding the platform categorically cannot produce this evidence."
+}
