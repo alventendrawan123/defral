@@ -1,691 +1,374 @@
-# FE — Plan Frontend (bima)
+# FE Plan v2 — wiring the live contracts
 
 **Defral · KeeperHub Agents Onchain Hackathon · deadline 2026-08-13 17:00 WIB**
-**React 19 · Vite · Tailwind 4 · Zustand · vitest**
+**Written 2026-08-11, after the contracts went live. Supersedes plan v1.**
 
-> Dokumen ini ditulis supaya bisa dieksekusi langsung bareng Claude. Tiap task punya acceptance criteria.
-
----
-
-## 0. Dua deliverable lo
-
-Dua hal, dan yang kedua lebih penting dari kelihatannya:
-
-1. **Produknya** — dashboard yang nunjukin posisi loan yang membela dirinya sendiri
-2. 🎬 **VIDEO 3 MENIT** — dan **video ini yang menentukan kita masuk 10 finalis atau enggak**
-
-> Riset lapangan: ~120 repo pesaing, **didominasi CLI dan README**. Kita punya UI polished + sistem komik hand-built + 13 panel `.webp` yang **nol tim lain punya**. Dan **finalis pitch LIVE 17-19 Agustus.**
+> Authority order, highest first:
+> 1. `infoFromContracttoFE.md` (read off the chain on 2026-08-11)
+> 2. `../prd/PRD-defral.md` for behaviour and limits
+> 3. plan v1 (this file's predecessor) for anything neither covers
+> 4. `../rules/rules.template.md` governs HOW every line is written, always
 >
-> **Aset visual lo adalah keunggulan struktural. Pakai.**
+> Where they disagree, the higher one wins and this document records the resolution. No one picks for themselves mid-task.
 
 ---
 
+## 0. What changed, and why this rewrite exists
+
+Plan v1 was written when no contract existed. Everything the UI shows today comes from fixtures I invented. Nine contracts are now live and verified, so most of plan v1's frontend assumptions are now false.
+
+Three of those assumptions are not merely stale, they are actively dangerous:
+
+| Plan v1 said | Reality | Consequence if shipped |
+|---|---|---|
+| Compute health and repay in `utils/health.ts` and render it | The contract exposes `healthRatioBps()` and `quoteGuardRepay()` | JS floats round differently. v1 renders 12666 where the chain says 12667. A judge comparing the UI to BaseScan sees us off by one |
+| Every Capability Matrix refusal row carries a reverted transaction link | KeeperHub refuses to broadcast a call it predicts will revert. Refusals have **no transaction at all** | Four rows link to nothing. The matrix is the centrepiece of the submission |
+| `frontend/docs/evidence/*.json` is our proof archive | I wrote those files by hand. The executionIds, gas figures and idempotency keys in them are **invented** | We would be presenting fabricated evidence as proof. This must be deleted before anything else |
+
+That last row is the reason this rewrite is not optional.
 
 ---
 
-## 0.5 Requirement yang lo tutup
+## 1. Facts, read from the chain
 
-PRD (`../PRD-defral.md`) menjawab **APA** dan **KENAPA**. Dokumen ini menjawab **GIMANA**.
+Every number below was read with `cast` against Base Sepolia on 2026-08-11. Nothing here is from a document.
 
-> **Kalau keduanya bertentangan:** `plan.md` menang untuk **signature dan endpoint**; PRD menang untuk **perilaku dan batasan**. Kalau lo nemu pertentangan, lapor ke grup — bukan pilih sendiri.
+### 1.1 Addresses
 
-Tiap requirement di bawah punya acceptance criteria di **PRD §10**. Kolom **Gap** menunjuk ke temuan audit implementasi pendahulu di **PRD §6** yang requirement itu tutup.
+| Role | Address |
+|---|---|
+| DefralVault (demo) | `0x4f634d7173eFf255973E762c3Fe04DF4887FfB35` |
+| MockLendingPool | `0x35371eD6E29ddE1fDE4DBe8A6048fFb0C860b9eD` |
+| NavOracle (dUST) | `0x44B94bb593F6De51Ad3385264C0168eEc8E56392` |
+| MockUSD (dUSD) | `0x9D9734fBb490b603A27f82ec0e23cDfDD9D6b838` |
+| MockTreasury (dUST) | `0x0A72124d5e606aB4264a653B6942738CBAbd2D43` |
+| borrower (demo) | `0x0a25a241Ad0c397136dE68ccF2D9fC1EC68Dc7f2` |
+| agentExecutor | `0x5515844B92dD96C3298Fd7d62Fb87cEE279F18D3` |
 
-| Req | Yang harus benar | Gap | Di plan ini |
+Vault `0x8E11A9a4...` is the rehearsal rig. Its agent is permanently revoked. **Never render it as the demo position.** It appears in this UI exactly once, on the proof page, labelled as the rehearsal vault (see §1.4).
+
+### 1.2 Live demo vault state
+
+`getPosition()` returns one tuple. One call, one render. Never eight separate reads.
+
+| Field | Raw | Decimals | Displays as |
 |---|---|---|---|
-| **F4** | Capability Matrix: tiap baris punya tx nyata **atau** pernyataan fungsinya tidak ada | — | §4.1 |
-| **F3** | Posisi tak terjaga yang dilikuidasi, **berdampingan** dengan yang dijaga | G1 | §4.4 |
-| **F5** | Halaman bukti baca **JSON statik ter-commit**, bukan API live | — | §4.3 |
-| **B1** | UI menyatakan vault **tidak punya** `withdraw` — non-custody | G3 | §4.1 baris terakhir |
-| **D3** | Dua kontrol UI yang dulu mati (`setGuardTrigger`, toggle sweep) **hidup lagi** | G7 | K4 |
-| **D7** | **Dua** jaminan di UI — treasury (yield) dan emas (non-yield) | G10 | K5 |
-| **D5** | Jaminan non-yield: panel sweep bilang "tidak berlaku", **bukan error** | G8 | K5 |
-| **A1-A4** | UI menyampaikan batas otoritas agent, bukan klaim privasi | G11 | §3, §4.1 |
-| **Goal 1** | Juri bisa memverifikasi batas otoritas **tanpa mempercayai kami** | — | §4.1, §5 video |
-| **Goal 2** | Jalur borrower lengkap **tanpa menyentuh terminal** | — | §1.1 |
+| `borrower` | `0x0a25a241...` | | `0x0a25...c7f2` |
+| `outstanding` | `6000000000` | 6 | 6,000.00 dUSD |
+| `collateralAmount` | `10000000000000000000000` | 18 | 10,000 dUST |
+| `triggerBps` | `13000` | bps | 130.00% |
+| `targetBps` | `14500` | bps | 145.00% |
+| `maxRepayPerEvent` | `2000000000` | 6 | 2,000.00 dUSD |
+| `couponSweep` | `true` | | enabled |
+| `reserve` | `3000000000` | 6 | 3,000.00 dUSD |
+| `lastActedRound` | `0` | | never acted |
+| `revoked` | `false` | | armed |
 
-> 🔴 **Sebelum mulai: baca section ATURAN DESAIN YANG MENGIKAT** (paling bawah). Isinya keputusan yang sudah dikunci dari audit, dan melanggarnya berarti mengulang bug yang sudah kami temukan.
+Other live reads:
 
-**Yang tidak ada di tabel ini bukan pekerjaan lo.** Kalau agent lo mulai ngerjain sesuatu yang tidak menutup satu pun baris di atas, hentikan.
-
-
-## 1. Permukaan produk yang harus dibangun
-
-Tidak ada yang perlu lo cari di folder lain. Stack: **React 19 + Vite + Tailwind 4 + Zustand + vitest**.
-
-### 1.1 Screen
-
-| Screen | Isi |
-|---|---|
-| `Landing` | Hero · **Capability Matrix** (§4.1) · **diagram Defence Window** (§K3) · panel komik |
-| `Connect` | Sambung wallet / pilih demo borrower |
-| `Onboarding` | Stepper: pilih collateral → pinjam → set reserve → set trigger |
-| `BorrowFlow` | Pilih collateral (dUST **atau** mXAU) · jumlah · konfirmasi |
-| `Dashboard` | **HealthRing** · PriceChart · ActivityFeed · reserve · kontrol policy |
-| `Vault` | Set reserve (= `approve`) · set Guard Trigger · toggle Coupon Sweep |
-| `Proof` | Halaman bukti (§4.3) — render `docs/evidence/*.json` |
-
-### 1.2 Komponen inti
-
-`HealthRing` (donut, warna per zona: hijau ≥ trigger, kuning di defence window, merah < 11000) · `PriceChart` (dengan garis `defensePrice` dan `protectionFloorPrice`) · `ActivityFeed` ("catatan Defral", first-person) · `CapabilityMatrix` · `ReceiptChip` · `DefenceWindow` · `AuthorityBadge` · `AddressPill` (`0x1234…abcd`) · `OnboardingStepper` · `Card` · `Toggle` · `ThemeToggle` · `NavBar`
-
-### 1.3 🔴 `src/lib/health.ts` — turunan risiko. Ini aset produk nyata.
-
-**Nol dashboard Aave punya angka ini.** Tulis persis:
-
-```ts
-/** Health Ratio dalam bps. 13000 = 130%. */
-export function computeHealthRatioBps(collateralQty: number, price: number, debt: number): number {
-  if (debt <= 0) return Number.POSITIVE_INFINITY;
-  return Math.round((collateralQty * price / debt) * 10000);
-}
-
-/** DEFENCE PRICE — harga di mana agent akan fire.
- *  "Defral bertindak kalau harga menyentuh $0.78" */
-export function defensePrice(collateralQty: number, debt: number, triggerBps: number): number {
-  return (debt * triggerBps / 10000) / collateralQty;
-}
-
-/** PROTECTION FLOOR — harga terendah yang masih bisa diselamatkan reserve.
- *  Di bawah ini, Defral membuka grace period, bukan fire-sale.
- *  Selesaikan: (qty * p) / (debt - reserve) = triggerBps/10000 untuk p. */
-export function protectionFloorPrice(
-  collateralQty: number, debt: number, reserve: number, triggerBps: number,
-): number {
-  const maxRepayable = Math.min(reserve, debt);
-  return ((debt - maxRepayable) * triggerBps / 10000) / collateralQty;
-}
-
-/** PROTECTION RUNWAY — persentase penurunan harga yang bisa diserap reserve
- *  dari harga sekarang sampai protection floor. Ini angka yang paling
- *  ditanya user: "gue tahan turun berapa persen?" */
-export function protectionRunwayPct(currentPrice: number, floorPrice: number): number {
-  if (currentPrice <= 0) return 0;
-  return Math.max(0, (1 - floorPrice / currentPrice) * 100);
-}
-
-/** Berapa yang bakal dibayar agent kalau fire sekarang. */
-export function computeGuardRepay(
-  collateralQty: number, price: number, debt: number,
-  targetBps: number, maxRepayPerEvent: number, reserve: number,
-): number {
-  const needed = Math.max(0, debt - (collateralQty * price * 10000) / targetBps);
-  return Math.min(needed, maxRepayPerEvent, reserve);
-}
-
-/** Zona status buat warna ring. */
-export function healthStatus(bps: number, triggerBps: number): "safe" | "defending" | "critical" {
-  if (bps >= triggerBps) return "safe";
-  if (bps >= 11000) return "defending";     // di dalam defence window
-  return "critical";                        // bisa dilikuidasi
-}
-```
-
-**Angka demo yang harus keluar** — sama persis dengan Solidity alven dan agent islakun:
-
-| | |
-|---|---|
-| collateral 10.000 @ 1.00, utang 6.000 | **16667 bps** |
-| harga 0.76 | **12667 bps** → repay **758.62** → **14500 bps** |
-| kupon | **112.50** → utang **5128.88** → **14818 bps** |
-| trigger 13000, reserve 1500 | defensePrice **0.78** · floor **0.585** |
-
-### 1.4 State — Zustand `src/store.ts`
-
-```ts
-interface DefralState {
-  position: PositionView | null;      // dari GET /api/position
-  events:   RescueEventView[];        // dari GET /api/events
-  executions: ExecutionView[];        // dari GET /api/executions  (receipt chip)
-  priceHistory: PricePoint[];
-  mode: "mock" | "live";
-
-  // aksi borrower — tx wallet, BUKAN lewat KeeperHub
-  openPosition(...): Promise<void>;
-  setReserve(amount): Promise<void>;      // = dUSD.approve(vault, amount)
-  setPolicy(trigger, target, cap, sweep): Promise<void>;
-  revokeAgent(): Promise<void>;
-
-  // aksi agent = TIDAK ADA. Agent yang eksekusi, bukan UI.
-}
-```
-
-> 🔴 **`isBackendMode()` parachute — WAJIB ADA.** `npm run dev` tanpa `VITE_API_URL` harus tetap menceritakan **seluruh cerita** pakai data mock. Kalau KeeperHub down pas penjurian 17-20 Agt, ini yang nyelamatin demo.
-
-### 1.5 Identitas visual
-
-Lapangan ini (~120 repo) **didominasi CLI dan README**. UI yang polished adalah **keunggulan struktural**, dan **finalis pitch LIVE 17-19 Agustus**.
-
-Bangun sistem "comic/ink": kartu bergaris tebal, halftone dot pattern, speech bubble buat suara Defral, burst animation pas rescue mendarat. Maskot yang **menonton** (idle) dan **melindungi** (rescue). Nada: neobank yang ramah, bukan terminal DeFi.
-
-> Kalau waktu mepet: **potong maskot dan animasi, JANGAN potong Capability Matrix atau halaman Proof.** Dua itu yang bawa argumennya.
-
-### Yang lo tulis
-
-| File | Perkiraan | Bagian |
+| Call | Value | Meaning for the UI |
 |---|---|---|
-| `src/components/CapabilityMatrix.tsx` | ~180 | §4.1 |
-| `src/components/DefenceWindow.tsx` | ~90 | §K3 |
-| `src/components/ReceiptChip.tsx` | ~60 | §4.2 |
-| `src/screens/Proof.tsx` | ~200 | §4.3 |
-| `src/lib/health.ts` + test | ~150 | §1.3 |
-| screen + komponen sisanya | ~1.200 | §1.1-1.2 |
-| `PROVENANCE.md` + README | — | §4.5 |
-| 🎬 **video 3 menit** | — | §5 |
+| `healthRatioBps()` | `16667` | 166.67%, healthy |
+| `quoteGuardRepay()` | `0` | nothing to pay. **Render as "nothing to pay", never as an error** |
+| `amountToReachTarget()` | `0` | same |
+| `couponDue()` | `112500000` | 112.50 dUSD accrued and unswept |
+| `MIN_TRIGGER_BPS` / `MAX_TRIGGER_BPS` | `12000` / `15000` | slider bounds if a write path is ever added |
+| `MAX_STALE()` | `3600` | oracle older than one hour is refused |
+| `pool.LIQUIDATION_BPS()` | `11000` | the liquidation line in the defence window |
+| oracle `latestRoundData()` | round `3`, price `100000000`, updatedAt `1786384066` | $1.00 at 8 decimals |
+| oracle `decimals()` | `8` | never hardcode this |
 
-## 2. Repo & commit hygiene (Senin jam 0 — lo yang pegang)
+### 1.3 Decimals, the single most likely way to ship a wrong number
 
-```bash
-git clone https://github.com/alventendrawan123/defral.git
-cd defral/FE
-npm create vite@latest frontend -- --template react-ts
-cd frontend && npm i -D tailwindcss @tailwindcss/vite vitest && npm i zustand
-npm run dev                      # → localhost:5173
+```
+dUSD  (outstanding, reserve, coupon, repay quote)   6
+dUST  (collateral)                                 18
+oracle price                                        8
+health, trigger, target, liquidation           basis points (divide by 100 for percent)
 ```
 
-**Seri commit lo: 08-10 → 08-12. JANGAN DI-SQUASH.**
+`6000000000` is six thousand, not six billion. Every one of these is read from the contract (`decimals()`), never written as a literal.
 
-> 🔴 **Kenapa commit hygiene penting di sini.** Defral berakar pada project Canton yang tim ini kirim ke hackathon sebelumnya bulan Juli. Repo itu punya **3 commit, semuanya 2026-07-20 — nol di dalam window hackathon ini.**
->
-> Aturan DoraHacks **mengizinkan** reuse — sudah diverifikasi, nol klausa originality di ToS maupun di aturan KeeperHub, dan halaman Prizes malah bilang *"top three can come from anywhere, including the same topic area"*.
->
-> Tapi yang bikin kita kehilangan shortlist adalah **kesan, bukan aturan.** Seri commit 08-10→08-12 di repo ini adalah **bukti** bahwa kerja KeeperHub-nya kerja hackathon ini. Itu sebabnya `PROVENANCE.md` (§4.5) ditaruh di paragraf pertama README — **disampaikan sebelum ada yang bertanya.**
+### 1.4 The demo vault has never been defended
 
-## 3. 🔴 Klaim yang boleh dan tidak boleh dibuat
+This is the most important thing in this document and it is easy to miss.
 
-Ini bukan soal gaya penulisan. Ini soal **satu-satunya cara paling cepat kehilangan juri**.
+`lastActedRound = 0` on the demo vault. The successful defence, transaction `0xb8f47a89...`, happened on the **rehearsal** vault. `guardRepay()` permanently lowers debt and `openPosition` reverts with `LoanAlreadyExists`, so the demo position could not be rehearsed without burning it.
 
-### 3.1 Klaim privasi: DILARANG, tanpa pengecualian
+So the dashboard will show a healthy, never-defended position, while the proof page shows a successful defence at a different address. **The UI must say so plainly.** If a judge notices the address differs and we have not said it first, we look like we are hiding it. If we say it first, it reads as rigour.
 
-Produk pendahulu kami di Canton punya privasi party-scoped yang **nyata**: reserve borrower dan tiap rescue secara struktural tidak terlihat oleh lending pool. README-nya menulis *"impossible to replicate on a public EVM chain."*
+Copy for this, on both surfaces:
 
-**Kalimat itu benar, dan justru karena benar ia tidak ikut pindah.** Di Base Sepolia setiap storage slot dan setiap event log terbaca dunia.
+> The defence below ran on an identical rehearsal position. Defending the demo position would permanently lower its debt, and it can only be opened once, so we kept it untouched for you to inspect.
 
-| ❌ Jangan pernah tulis | Kenapa |
+### 1.5 Live blocker: the oracle is stale right now
+
+`updatedAt` is 28,740 seconds old against a `MAX_STALE` of 3,600. Reads are unaffected, but `guardRepay()` would refuse with `Refused_StaleOracle` at this moment.
+
+Two consequences, both must be handled:
+
+1. **Product:** oracle freshness is a real UI state, not an edge case. Design it (§5.6).
+2. **Logistics:** alven must push a fresh NAV immediately before the video is recorded, and again before judging opens. This belongs on the run sheet, not in code.
+
+---
+
+## 2. Conflicts, resolved
+
+Recorded so no one relitigates them mid-task.
+
+| # | Conflict | Resolution | Why |
+|---|---|---|---|
+| C1 | v1 §1.3 makes `utils/health.ts` the source of displayed numbers. SC doc §4a forbids recomputing | **Chain wins.** `healthRatioBps()` and `quoteGuardRepay()` are read, never derived | Requirement D2 demands contract, agent and UI show identical figures. Proven on chain to the unit |
+| C2 | v1 §K4 says revive `setGuardTrigger` and the sweep toggle. SC doc §7 says the FE never writes | **Read-only wins.** Both render live on-chain policy, with no control that pretends to write | No wallet integration exists and the deadline is in two days. A control that looks live and does nothing is exactly the bug K4 was written about |
+| C3 | v1 §4.1 wants a reverted transaction link on refusal rows | **Execution records instead.** Render the contract's own decoded error with its live arguments | KeeperHub will not broadcast a doomed call. There is no transaction to link. Confirmed on three independent paths |
+| C4 | v1 §K5 wants a second collateral, mXAU | **Cut.** Only dUST is deployed | Rendering a collateral that does not exist is the same lie as a fabricated transaction |
+| C5 | v1 Goal 2 wants a complete borrower path with no terminal | **Reduced to a read-only explainer.** No fake mutation | Same reason as C2 |
+| C6 | v1 §1.3 signatures use `number`. Chain returns `bigint` at three different scales | **`bigint` end to end.** Convert to string for display only at the render boundary | Float cannot hold `10000e18`. This is how the off-by-one in C1 happens |
+| C7 | v1 says stack is Vite, React 19, Tailwind 4 | **Next.js App Router, React 18, Tailwind 3**, already built and shipped | It is what exists and it is green in CI |
+
+Two rules from the SC doc that are not conflicts but are binding, repeated here so they are not lost:
+
+- **Never claim we cannot export the agent key.** KeeperHub documents that an org owner can (`canExportKey: true`). The correct and stronger framing: the owner can export it, and it changes nothing, because the vault accepts exactly two zero-argument calls that re-read the oracle in the same transaction and refuse while the position is healthy.
+- **`couponDue()` of zero is correct**, not a fault. `Refused_NoCouponDue` is the system working. Never render it red. (Today it is 112.50, so the sweep is genuinely available.)
+
+---
+
+## 3. Delete first
+
+Nothing new gets built on top of invented data.
+
+| Path | Action |
 |---|---|
-| "private", "shadow", "invisible", "hidden", "no one can see" | Salah di chain publik. Juri buka BaseScan, selesai |
-| "encrypted", "confidential" | Tidak ada enkripsi di sini |
-| Sinyal ZK / private mempool "coming soon" | Mengklaim privasi yang belum dibangun = cara tercepat kehilangan juri teknis |
-| Pengganti yang "mirip privasi" | Melemahkan klaim lebih buruk daripada menghapusnya |
+| `frontend/docs/evidence/executions.json` | **Delete.** Every executionId, gas figure and idempotency key in it is fabricated |
+| `frontend/docs/evidence/outcomes.json` | **Delete.** Same |
+| `src/services/mockData.ts` | **Replace** with a snapshot of real chain state (§5.2). Current values contradict the chain: reserve 741.38 against a real 3,000.00, maxRepay 1,500 against a real 2,000 |
+| `src/constants/capabilities.ts` | **Rewrite.** All eight rows currently say `awaiting deployment`. The contracts are deployed |
+| mXAU in mock data, and the collateral switch | **Remove** (C4) |
+| `PROVENANCE.md` real-versus-mock table | **Rewrite.** It says "contracts not deployed" |
 
-**Yang menggantikannya adalah BATAS OTORITAS** (PRD §4) — dan itu justru **lebih kuat** di chain publik, karena pihak ketiga bisa memverifikasinya sendiri tanpa mempercayai kami.
+---
 
-### 3.2 Framing pengganti: TEMPORAL
+## 4. Architecture
 
-| ✅ Pakai ini | Kenapa jalan |
-|---|---|
-| *"Ia tidak pernah menjadi likuidasi"* | Benar, bisa diverifikasi, dan itu memang produknya |
-| *"Anda tidur melewatinya"* | Manfaat nyata, nol klaim teknis |
-| *"Agent kami mencoba mengambil uang saat posisi Anda sehat. Chain menolak. Ini hash-nya."* | **Kalimat terkuat yang kita punya.** Bisa diklik |
-| *"Kami tidak pernah memegang cadangan Anda — tidak ada fungsinya"* | Harfiah benar, diverifikasi satu `grep` |
+Current structure stays. It is green in CI and matches `rules.template.md` §3. New code slots in as follows.
 
-Plus satu baris jujur di suatu tempat yang terlihat: **Base Sepolia itu publik.**
+```
+src/
+├── app/
+│   ├── (landing)/_components/    unchanged shape, real evidence
+│   ├── dashboard/_components/    now fed by chain reads
+│   ├── proof/_components/        now fed by the real archive
+│   └── vault/_components/        becomes read-only policy display
+├── components/ui/                unchanged
+├── constants/
+│   ├── contracts.ts              NEW addresses and decimals, one source
+│   └── capabilities.ts           rewritten against real evidence
+├── services/
+│   ├── chain/
+│   │   ├── client.ts             NEW viem public client
+│   │   ├── vaultReads.ts         NEW getPosition, quote, coupon, oracle via multicall
+│   │   └── snapshot.ts           NEW committed fallback for the parachute
+│   └── evidenceArchive.ts        repointed at the real files
+├── types/                        bigint-based position types
+└── utils/
+    ├── decimals.ts               NEW formatUnits wrappers, bps helpers
+    └── health.ts                 REDUCED, see §5.5
+```
 
-### 3.3 Satu kalimat yang WAJIB ada — biaya nol
+### Rendering and caching, decided per route
 
-> *"Di bawah protection floor, saya membuka grace period, bukan fire-sale — tidak ada likuidasi paksa di sini."*
+`rules.template.md` §8 requires a deliberate choice per route and §9 requires explicit caching intent.
 
-Ini caption chart, first-person, suara Defral. **Satu string yang membedakan Defral dari 14 liquidation guardian di hackathon yang sama.** Jangan hilang.
-
-### 3.4 Suara produk
-
-First-person, dari sisi Defral, ke borrower. Bukan pasif, bukan korporat.
-
-| ❌ | ✅ |
-|---|---|
-| "Repayment executed successfully" | *"Harga turun 24%. Saya bayar $758.62 dari cadangan Anda. Posisi aman."* |
-| "Health factor is nominal" | *"Diperiksa jam 03.20. Sehat. Tidak ada tindakan."* |
-| "Insufficient reserve" | *"Cadangan Anda tidak cukup untuk menutup ini. Saya buka grace period dan memberi tahu pool."* |
-
-> Notifikasi **no-op** itu intinya, bukan noise. *"Diperiksa. Sehat. Tidak ada tindakan."* — **itu membuktikan gerbangnya bekerja, tiap siklus.**
-
-### 3.5 Istilah — pakai yang benar sejak awal
-
-| ❌ | ✅ | Kenapa |
+| Route | Strategy | Why |
 |---|---|---|
-| "auto-rebalancing" | **"autonomous deleveraging"** | Yang dibangun mengecilkan **penyebut** dan tidak pernah menyentuh pembilang. "Rebalancing" ngundang juri nanya *"antar leg apa?"* |
-| "vault", "shadow vault" | **"cadangan" / "reserve"** | Kita tidak punya vault yang memegang uang — itu inti non-custody-nya |
-| "bot" | **"agent"** | Konsisten dengan bahasa hackathon |
+| `/` landing | Static | Capability matrix and defence window are the same for everyone |
+| `/proof` | Static | Reads committed JSON. Must survive KeeperHub losing its logs |
+| `/dashboard` | Server Component, `export const revalidate = 30` | Live chain data, but a judge refreshing must not hammer the public RPC |
+| `/vault` | Server Component, `export const revalidate = 30` | Same data, policy view |
+
+Chain reads happen in Server Components. No `'use client'` above a leaf. No secret reaches the browser, and the RPC URL is the only environment variable, safely public.
 
 ---
-## 4. Yang dibangun baru
 
-### 4.1 🔴 Capability Matrix — pengganti Privacy Matrix
+## 5. Work packages
 
-Komponen `<table>` responsif yang **sama persis** (table di md+, card stack di bawah). Cuma barisnya yang ganti. **Tiap sel bawa `transactionLink` NYATA.**
+Each has acceptance criteria. Each ends green on `lint`, `type-check`, `test`, `build`, because the pre-commit hook runs all four.
 
-| Bisakah agent… | | Bukti |
+### 5.1 Chain access layer
+
+- Add `viem`. Copy `docs/abi/*.json` into `frontend/docs/abi/`, **stripping the UTF-8 BOM** (the source files have one and `JSON.parse` rejects it).
+- `constants/contracts.ts`: addresses, chain id 84532, explorer base URL, token decimals. One source, so a mainnet move is one file (v1 §8.17).
+- `services/chain/client.ts`: viem public client, `NEXT_PUBLIC_RPC_URL` with the public Base Sepolia endpoint as default.
+- `services/chain/vaultReads.ts`: one `multicall` returning position, `quoteGuardRepay`, `couponDue`, `healthRatioBps`, oracle `latestRoundData` and `decimals`.
+
+**Acceptance:** one network round trip renders the dashboard. Reading the demo vault yields exactly the §1.2 table. A unit test asserts the decoder maps the ten-field tuple to named fields in the right order.
+
+### 5.2 Snapshot parachute
+
+The parachute survives, but it stops being fiction.
+
+- A script reads the live vault and writes `services/chain/snapshot.ts` with the real values and the block number and timestamp they were read at.
+- The UI falls back to the snapshot when the RPC fails, and says so: "Showing a snapshot taken at block N. The live node did not answer."
+
+**Acceptance:** with the RPC unreachable, every screen still tells the whole story and is visibly labelled as a snapshot. Judging runs days after the demo; a dead public RPC must not take the submission down.
+
+### 5.3 Capability Matrix against real evidence
+
+Evidence becomes a three-way union. The `pending` variant is deleted.
+
+```ts
+type CapabilityEvidence =
+  | { kind: 'transaction'; transactionLink: string; receiptStatus: ReceiptStatus }
+  | { kind: 'execution-record'; executionId: string; contractError: string }
+  | { kind: 'absent-from-abi'; statement: string }
+```
+
+Eight rows, each mapped to evidence that actually exists:
+
+| Row | Answer | Evidence |
 |---|---|---|
-| Baca health ratio lo | ✅ YA | `tx` |
-| Bayar utang lo dari reserve saat TIDAK sehat | ✅ YA | `tx` |
-| Bayar saat posisi SEHAT | ❌ **TIDAK PERNAH** | **tx reverted** `verified ✓` |
-| Bertindak pada oracle basi | ❌ **TIDAK PERNAH** | **tx reverted** `verified ✓` |
-| Bertindak lagi di round harga yang sama | ❌ **TIDAK PERNAH** | **tx reverted** `verified ✓` |
-| Bertindak setelah lo revoke | ❌ **TIDAK PERNAH** | **tx reverted** `verified ✓` |
-| Kirim reserve lo ke alamat lain | ❌ **TIDAK ADA FUNGSINYA** | tabel ABI |
-| **Menarik reserve lo** | ❌ **TIDAK ADA FUNGSINYA — kami tidak pernah memegangnya** | non-custodial |
+| Read your health ratio | YES | live read, rendered inline |
+| Repay while unhealthy | YES | transaction `0xb8f47a89...`, marked rehearsal vault |
+| Repay while healthy | NEVER | execution record `yjh4l0m4d9jgy7qtt6g6r`, `Refused_Healthy(16667, 13000)` |
+| Act twice in one round | NEVER | execution record `fh8e4y796hirzz6woa0pj`, `Refused_AlreadyActed(2)` |
+| Sweep with no coupon due | NEVER | execution record `1ewhomgsu2j8grqchsule`, `Refused_NoCouponDue` |
+| Act after revoke | NEVER | rehearsal vault, agent permanently revoked, `Refused_AgentRevoked` |
+| Be called by anyone else | NEVER | transaction `0xb6a01688...`, `NotAgent`, called by the system deployer |
+| Withdraw your reserve | NEVER | absent from the ABI, verified against the committed ABI |
 
-> 🔴 **Baris terakhir harfiah benar.** Defral **non-custodial**: reserve lo tetap di wallet lo. Reserve = `min(balanceOf, allowance)`. Vault tidak punya `topUp()`, tidak punya `withdraw()`. **Itu bukan kalimat marketing — itu ketiadaan fungsi di ABI.**
+**No refusal row renders a BaseScan button.** A refusal shows the contract's own error name with its live arguments, and a line saying KeeperHub declined to broadcast a call it predicted would revert.
 
-### 4.2 Receipt chip
-Tiap kartu rescue dapat chip status dari `GET /api/executions`:
-`verified ✓` (hijau) · `reverted` (merah, **dan ini BAGUS** kalau di baris penolakan) · `unconfirmed` (kuning) · `sponsored` (badge terpisah)
+**Acceptance:** a test asserts every row carries evidence, that no `execution-record` row carries a link, and that the `NotAgent` row is present. The union makes an empty row fail type-check.
 
-### 4.3 Halaman `/proof`
-Render `docs/evidence/*.json`: tiap baris = nama serangan · `executionId` · `Idempotency-Key` (hex penuh) · hasil simulate (`wouldRevert` + `revertReason`) · hasil broadcast · `transactionLink` · `gasUsed` · `receiptStatus`.
+### 5.4 Proof page
 
-> ⚠️ **Baca dari JSON statik yang ter-commit, JANGAN dari API live.** Juri menilai 17-20 Agt, tx kita 11-12 Agt, retensi log free-tier tidak terverifikasi. **Halaman ini harus tetap hidup walau KeeperHub kehilangan log kita.**
+Rebuilt from the real archive at `docs/evidence/`.
 
-### 4.4 🔴 Beat baru — "inilah yang terjadi tanpa Defral"
+Order matters. The `NotAgent` transaction goes **first**: the caller deployed every contract, owns the pool and holds every admin key, and the vault still refused. That is the strongest artifact in the repository.
 
-Demo punya **posisi kedua yang TIDAK dijaga**. Harga turun sama → siapa pun panggil `pool.liquidate()` → **collateral benar-benar disita**.
+Then the successful defence, then the three refusal records, each with its decoded error, then the honest-limit note that these are execution records rather than mined transactions.
 
-Render **side-by-side**:
+**Acceptance:** page is static, reads committed JSON, and works with the network off. Zero fabricated identifiers. Every field on screen traces to a file in `docs/evidence/`.
 
-| | Tanpa Defral | Dengan Defral |
+### 5.5 Dashboard on live data
+
+- Health ratio, repay quote, coupon due, reserve, debt and collateral all come from the chain, formatted by decimals.
+- `quoteGuardRepay() === 0n` renders "Nothing to pay. The position is healthy." It is not an error and gets no red.
+- `utils/health.ts` is reduced. `computeHealthRatioBps` and `computeGuardRepay` are **deleted from the render path**, because the chain provides both. What survives is the protection floor and runway, which have no on-chain equivalent, rewritten in `bigint`, kept pure and kept tested. Their tests stay as the regression net for the demo numbers.
+- The defence window diagram uses live `triggerBps` and the pool's `LIQUIDATION_BPS`, not constants.
+
+**Acceptance:** the dashboard renders 166.67%, 6,000.00 dUSD debt, 3,000.00 dUSD reserve and 112.50 dUSD coupon due, matching §1.2 to the unit. No float arithmetic anywhere between the RPC and the screen.
+
+### 5.6 The four states, plus oracle freshness
+
+`rules.template.md` §12 requires loading, error, empty and success on every async surface. Chain data adds a fifth that is genuinely ours:
+
+| State | Screen shows |
+|---|---|
+| Loading | Skeleton, never a bare spinner |
+| Error | Snapshot fallback, labelled, with a retry |
+| Healthy | "Nothing to pay", the agent is armed and idle |
+| Defending | The live quote and what it restores the ratio to |
+| **Oracle stale** | "The last price is N minutes old. Above one hour the contract refuses to act at all, by design." Amber, not red |
+
+The stale state is not a defect to hide. It is the freshness gate doing its job, and it is one more thing the contract refuses.
+
+### 5.7 Vault route becomes read-only
+
+Policy values render live from `policy()`: trigger, target, max repay per event, sweep flag, revoked flag. The reserve is shown with the sentence that makes it non-custodial: the reserve is `min(balance, allowance)`, it sits in the borrower wallet, and lowering the approval is how it comes back.
+
+Every write control is removed rather than disabled. A greyed-out control still implies the feature exists.
+
+**Acceptance:** no `onClick` on the page performs a state change. The trigger bounds 12000 and 15000 are read from the contract, not typed in.
+
+### 5.8 Landing, connect and onboarding
+
+- Landing keeps hero, capability matrix, defence window. The outcome comparison loses its invented liquidation side and becomes the real pair: the successful defence, and the deployer being refused.
+- `/connect` and `/onboarding` lose their fake state mutation and become one honest explainer of what a borrower does, driven by live policy values. If time runs short, these two routes are the first thing cut. They carry no argument.
+
+### 5.9 Copy and documentation
+
+- Purge the "we never hold the key" framing. Replace with the export framing from §2.
+- Rewrite the `PROVENANCE.md` real-versus-mock table: contracts are live, the demo position is real and unrehearsed, the defence transaction is on the rehearsal vault, refusals are execution records rather than transactions.
+- Keep the grace period sentence, first person, on the chart.
+- Existing copy tests stay and keep enforcing no banned claim and no em dash.
+
+---
+
+## 6. Testing
+
+Per `rules.template.md` §15, behaviour over internals.
+
+| Test | Guards against |
+|---|---|
+| Tuple decoder maps ten fields in order | A silent field-order swap showing reserve as debt |
+| Decimal formatting at 6, 18 and 8 | The single most likely wrong number on screen |
+| bps to percent | 16667 rendering as 1.6667% |
+| `quoteGuardRepay` of zero renders as text, not an error | Red on a healthy position |
+| Every capability row carries evidence | An empty cell in the centrepiece |
+| No `execution-record` row carries a transaction link | Linking to a transaction that does not exist |
+| Committed archive parses and has no null executionId | A fabricated entry creeping back |
+| Copy has no banned claim and no em dash | Losing a judge on a sentence |
+| Snapshot fallback renders every screen | A dead RPC during judging |
+
+---
+
+## 7. Sequence
+
+Today is 2026-08-11. Video records 08-12. Deadline 08-13 17:00 WIB.
+
+**Block 1, must land today, in order:**
+1. §3 delete the fabricated evidence
+2. §5.1 chain access layer
+3. §5.5 dashboard on live data
+4. §5.3 capability matrix on real evidence
+5. §5.4 proof page
+
+**Block 2, today if it holds:**
+6. §5.6 states including oracle freshness
+7. §5.2 snapshot parachute
+8. §5.7 vault read-only
+
+**Block 3, 08-12 morning:**
+9. §5.8 landing and the outcome pair
+10. §5.9 copy and provenance
+
+**Cut list, in this order, if time runs out:** `/onboarding`, `/connect`, the snapshot parachute, the outcome comparison. Never cut the capability matrix or the proof page. Those carry the argument.
+
+---
+
+## 8. Risks
+
+| Risk | Likelihood | Mitigation |
 |---|---|---|
-| NAV 1.00 → 0.76 | | |
-| Hasil | 🔴 **`Liquidated`** — collateral disita | 🟢 **`Rescued`** — 758.62 dibayar |
-| | `tx` | `tx` |
-
-**Juri klik dua transaksi: satu kehilangan collateral, satu tidak.** Taruhan berhenti jadi klaim.
-
-### 4.5 `PROVENANCE.md` + README
-
-Provenance **di paragraf pertama README**, sebelum ada yang nanya. Draf lengkapnya ada di PRD PRD §11 — copy dari sana.
-
-Intinya: apa yang dibawa dari build Canton · apa yang ditulis baru minggu ini · **dan yang hilang, tanpa pura-pura sebaliknya** (klaim privasi tidak selamat; kami menggantinya, bukan mereplikasinya).
-
-Plus section **"Apa yang nyata vs apa yang mock"**.
-
-> 🔴 **Deskripsi GitHub repo ini masih kosong.** Isi dengan satu baris yang memimpin dengan KeeperHub — itu yang muncul di hasil pencarian dan hal pertama yang dibaca reviewer.
+| Oracle stale during recording or judging | **Happening right now** | alven pushes NAV before recording and before judging. UI degrades honestly either way (§5.6) |
+| Public Base Sepolia RPC rate limits under judging traffic | Medium | `revalidate = 30` caches server side. Snapshot parachute on failure |
+| Judge spots the defence is on a different vault | High, and reasonable of them | We say it first, on both surfaces (§1.4) |
+| Float creeps back in and shifts a digit | Medium | `bigint` end to end, plus the decimal tests |
+| A fabricated identifier survives the purge | Low, high damage | Test asserts every archive entry traces to `docs/evidence/` |
 
 ---
 
-## 5. 🎬 VIDEO — 3:00. Ini deliverable terpenting lo.
+## 9. Definition of done
 
-> **Aturan produksi yang mengikat: nol beat menampilkan UI tanpa transaksi di sebelahnya. Tiap klaim berakhir di BaseScan dalam 10 detik. Beat yang tidak bisa berakhir di BaseScan — dipotong.**
-
-| Waktu | Beat |
-|---|---|
-| **0:00-0:22** | 🔴 **COLD OPEN — agent kami mencoba mencuri.** Nol judul, nol problem statement. Terminal: `npm run prove`. Voice-over kalimat pertama: *"Ini agent kami sedang mencoba mengambil uang yang tidak boleh diambilnya."* → `wouldRevert: true`, `revertReason: "Refused_Healthy"` → broadcast → **BaseScan Status: Fail.** *"Itu transaksi nyata di Base Sepolia. Agent kami mencoba. Chain menolak. Anda bisa mengklik hash itu sekarang."*<br>**(14 tim buka dengan grafik health factor turun. 20 detik pertama satu-satunya kesempatan mematahkan pattern-match.)** |
-| 0:22-0:48 | **TESIS.** Diagram statis tiga kunci: publisher (gerakkan NAV — bukan milik agent) · borrower (reserve, **di wallet sendiri**) · Turnkey EOA (**`GUARD_ROLE` saja, kami tidak pernah pegang private key-nya**). *"Agent ini punya dua fungsi atas uang Anda. Keduanya nol argumen. Dan uangnya tidak pernah meninggalkan dompet Anda."* Split-screen 4 detik: `kh wallet info --json` vs BaseScan `agentExecutor()` — alamat sama, **nol komentar** |
-| 0:48-1:30 | **RESCUE.** Ring 16667 hijau → `setPrice(0.76)` **kunci publisher** → ring merah 12667 → body `check-and-execute` ditampilkan penuh → poll → **BaseScan Success**, event `Rescued`, **758.62, 12667→14500**. Tutup: `getPosition()` → `5241.38`. *"Angka itu sama persis dengan test suite yang kami tulis untuk ledger berbeda tiga minggu lalu."* |
-| **1:30-1:52** | 🔴 **BEAT BARU — taruhannya.** Posisi kedua, tidak dijaga, harga sama. Siapa pun panggil `liquidate()`. **Collateral disita, tx di BaseScan.** *"Ini yang terjadi tanpa Defral. Dua transaksi, harga yang sama, hasil yang berbeda."* |
-| 1:52-2:22 | **NEGATIVE CONTROL.** Double-fire → `Refused_AlreadyActed`. Revoke (borrower tekan tombol, tx viem **bukan** KeeperHub) → `Refused_AgentRevoked` — *"Uang Anda sekarang hanya bisa bergerak ke Anda."* Lalu tabel ABI: *"Serangan ini tidak punya transaksi karena tidak ada yang bisa dikirim."* Penutup: *"Reverted transaction adalah transaction. Punya hash, membakar gas, permanen. Itu sebabnya kami membakar gas untuk gagal."* |
-| 2:22-2:46 | **RELIABILITY.** #1840 side-by-side: derivasi docs → 3 replay, `idempotentReplay: true` disorot, **nol tx**; derivasi kami → key baru, tx mendarat. Lalu `OVERLAP_GUARD=off` → 6 submit duplikat → `lastActedRound` onchain nangkep 5 |
-| 2:46-3:00 | **PROVENANCE, diucapkan sendiri.** Scroll `PROVENANCE.md`. *"Health math, decision loop, dan UI ini dibangun untuk hackathon Canton di Juli. Contract, integrasi KeeperHub, reliability layer, dan seluruh yang baru saja Anda tonton gagal — ditulis minggu ini. Klaim privasi Canton kami tidak ikut pindah, dan kami menghapusnya alih-alih melemahkannya."* Frame akhir statis 4 detik: link sukses + link liquidation + 2 link reverted |
-
-### ⚠️ Wajib ada teks di layar saat buka BaseScan
-> *"tx ini sponsored — kolom `From` adalah relayer KeeperHub, aksi kami berjalan sebagai internal call, jadi tidak muncul di riwayat wallet. Yang di-link adalah `transactionLink` dari KeeperHub."*
-
-**Tim yang gak tahu ini bakal nautin wallet history kosong dan terlihat seperti mockup.**
+- [ ] Zero fabricated identifiers anywhere in the repository
+- [ ] Every number on screen read from the chain or from a committed real artifact
+- [ ] `quoteGuardRepay` of zero reads as "nothing to pay", never as an error
+- [ ] No refusal row offers a BaseScan link
+- [ ] The `NotAgent` transaction is the first item on the proof page
+- [ ] The rehearsal vault is disclosed on both the dashboard and the proof page
+- [ ] Oracle staleness is a designed state, in amber
+- [ ] No control implies a write the frontend cannot perform
+- [ ] Decimals read from the contract, never hardcoded
+- [ ] `bigint` from RPC to the render boundary
+- [ ] No banned claim, no em dash, enforced by test
+- [ ] `lint`, `type-check`, `test`, `build` green, CI green on main
+- [ ] `PROVENANCE.md` real-versus-mock table matches reality
 
 ---
 
-## 6. Jadwal
+## 10. Open question for alven
 
-### SENIN 10 AGT — nol blocker, mulai sekarang
-1. Repo + commit import (§2)
-2. Purge copy Canton + `AddressPill` (§3)
-3. **Capability Matrix** shell dengan fixture data (§4.1) — 8 baris, tiap baris punya slot bukti
-4. **Jam 3+:** alven serahkan alamat stub → sambungkan ke alamat nyata
+One only. Everything else in `infoFromContracttoFE.md` was clear enough to build from.
 
-### SELASA 11 AGT
-Capability Matrix melawan **data nyata**, tiap sel bawa `transactionLink` · Receipt chip (§4.2) · Halaman `/proof` (§4.3) · **Mulai tulis shot list video**
-
-### RABU 12 AGT
-| Jam | |
-|---|---|
-| 09-12 | Halaman bukti final + beat side-by-side liquidation (§4.4) + rapikan untuk rekaman |
-| 12-13 | README + **Provenance di paling atas** (§4.5) |
-| 13-14 | **DRESS REHEARSAL** — semua nonton, tandai shot list |
-| **14-16** | 🎬 **REKAM VIDEO.** Satu take penuh, review, satu re-take. **Jangan lebih dari dua** |
-| 16-17 | **Deskripsi GitHub ditulis ulang memimpin dengan KeeperHub, bukan Canton** |
-| 17-19 | 🔴 **SUBMIT** — upload video. **Selesai 19.00, bukan tengah malam** |
-
-
-### KAMIS 13 AGT — BUFFER. Deadline **17.00 WIB**.
-
-**Nol commit kode.** Hanya: buka ulang tiap tautan tx di incognito · konfirmasi frontend ter-deploy hidup · konfirmasi video bisa diputar · konfirmasi repo public · jawab pertanyaan panitia.
-
-**Kalau seluruh tim menganggur hari ini, rencananya berhasil.**
-
----
-
-## 7. Definition of Done
-
-- [ ] Nol string "Canton" di UI (kecuali section Provenance yang memang sengaja)
-- [ ] Nol string terlarang §3.1 di seluruh UI (`private`, `hidden`, `invisible`, `encrypted`, `shadow`)
-- [ ] Tiap baris Capability Matrix bawa `transactionLink` nyata atau *"TIDAK ADA FUNGSINYA"*
-- [ ] Receipt chip render `verified` / `receiptStatus` / `sponsored`
-- [ ] `/proof` baca **JSON statik ter-commit**, bukan API live
-- [ ] Beat side-by-side liquidation ada, dua tx bisa diklik
-- [ ] Parachute `isBackendMode()` masih jalan
-- [ ] Kalimat grace-period §3.3 ada di chart, first-person
-- [ ] `PROVENANCE.md` ditautkan dari **paragraf pertama** README
-- [ ] Deskripsi GitHub memimpin dengan KeeperHub
-- [ ] 🎬 **Video ≤3:00, tiap klaim berakhir di BaseScan dalam 10 detik**
-- [ ] Video bisa diputar dari **incognito**
-- [ ] `pnpm test` hijau (suite frontend yang diwarisi harus tetap lulus)
-
----
-
----
-
----
-
-## 8. STANDAR REKAYASA — cara nulis kode yang bertahan dibaca juri
-
-Juri menilai *"kualitas kode & dokumentasi"* sebagai **1 dari 4 kriteria**, dan lo menyetir Claude agent — agent akan dengan senang hati menghasilkan kode yang jalan tapi tidak bisa dipertahankan, kecuali lo mengikatnya.
-
-**Aturan buat agent lo:** kalau ia menghasilkan sesuatu yang melanggar standar di bawah, tolak dan minta ulang. Jangan "nanti dirapikan" — tidak akan sempat.
-
-### 8.1 Math di `lib/`, murni, dengan doc comment yang menjelaskan persamaannya
-
-```ts
-/**
- * Health Ratio, mengikuti semantik yang sama dengan kontrak.
- *
- * Health Ratio = collateralValue / debt, dibawa sebagai Int basis points
- * (13000 = 130%). Uang tetap number, dibulatkan ke sen, sama seperti kontrak.
- *
- * Fungsi-fungsi ini MURNI dengan sengaja: store adalah pembungkus tipis yang
- * memanggil modul ini dan menulis hasilnya balik ke state. Menjaga math tetap
- * murni membuatnya bisa dites langsung terhadap angka demo, tanpa menyentuh
- * React maupun store.
- */
-export const BPS_SCALE = 10_000;
-```
-
-Kalimat *"murni dengan sengaja, karena…"* itu yang bikin orang berikutnya tidak memindahkan math ke dalam komponen.
-
-Tiap fungsi turunan menyebut **hubungannya dengan yang lain**:
-
-```ts
-/**
- * Utang terbesar yang masih menjaga Health Ratio di/atas `ratioBps` —
- * kebalikan dari computeHealthRatioBps, dipakai membatasi slider Borrow.
- * Dibulatkan ke BAWAH ke sen supaya rasio hasilnya tidak pernah jatuh
- * di bawah batas.
- */
-export function maxOutstandingForRatioBps(collateralValue: number, ratioBps: number): number
-```
-
-Perhatikan `floor` vs `round` **dipilih dan dijelaskan**. Pembulatan yang salah arah di UI keuangan adalah bug yang tidak pernah dilaporkan siapa pun, cuma bikin orang tidak percaya.
-
-### 8.2 Union type untuk state, bukan boolean
-
-```ts
-// ✅ tiga keadaan, eksplisit, exhaustive-checkable
-export type HealthStatus = 'protected' | 'guarded' | 'action';
-
-// ❌ dua boolean = empat kombinasi, dua di antaranya mustahil
-{ isHealthy: boolean; isCritical: boolean }
-```
-
-### 8.3 Copy sebagai data, di satu tempat
-
-```ts
-/** Kata status persis sesuai spesifikasi produk — jangan diganti. */
-export const STATUS_LABEL: Record<HealthStatus, string> = {
-  protected: 'Terlindungi',
-  guarded:   'Dijaga',
-  action:    'Perlu tindakan',
-};
-```
-
-String yang menghadap user tinggal di satu objek, bukan tersebar di JSX. Ia jadi bisa di-test, bisa di-review sekali jalan, dan tidak menyimpang antar layar.
-
-### 8.4 Peta lookup, bukan ternary di JSX
-
-```ts
-// ✅ tiga peta di module scope — style per state, terbaca sekali pandang
-const STATUS_STROKE: Record<HealthStatus, string> = {
-  protected: 'var(--color-sage)', guarded: 'var(--color-amber)', action: 'var(--color-terracotta)',
-};
-const STATUS_TEXT_CLASS: Record<HealthStatus, string> = { ... };
-const STATUS_DOT_CLASS:  Record<HealthStatus, string> = { ... };
-
-// dipakai: stroke={STATUS_STROKE[status]}
-
-// ❌ ternary bersarang di dalam markup
-className={status === 'protected' ? 'text-sage' : status === 'guarded' ? 'text-amber' : 'text-terracotta'}
-```
-
-Kalau nanti ada state keempat, TypeScript **memaksa** lo melengkapi ketiga peta. Ternary tidak.
-
-### 8.5 Angka ajaib visual pun punya nama dan alasan
-
-```ts
-// 200% digambar sebagai cincin penuh — ini menjaga gauge tetap tenang dan
-// terbaca di seluruh rentang demo (126%–166%), bukan terlihat kosong atau mentok.
-const VISUAL_CAP_BPS = 20_000;
-```
-
-Bukan cuma `const CAP = 20000`. **Alasannya yang bernilai** — orang berikutnya yang tergoda mengubahnya jadi tahu apa yang rusak.
-
-### 8.6 Komponen menerima data, bukan mengambilnya
-
-```tsx
-interface HealthRingProps {
-  healthRatioBps: number;
-  triggerRatioBps: number;
-  status: HealthStatus;
-  size?: number;
-}
-
-/**
- * Elemen utama seluruh app: satu angka menguasai layar.
- * Cincin yang tenang — bukan gauge yang berteriak — dengan tanda kecil di
- * Guard Trigger supaya titik pemicunya terbaca tanpa terasa mengancam.
- */
-export function HealthRing({ healthRatioBps, triggerRatioBps, status, size = 260 }: HealthRingProps) {
-```
-
-Doc comment menyatakan **peran komponen dalam produk**, bukan mengulang nama fungsi. Fetching tinggal di store dan satu modul client. Itu juga yang membuat lo bisa membangun seluruh UI dengan fixture **sebelum** kontraknya ada — dan Senin, itulah situasinya.
-
-### 8.7 Defensif terhadap nilai yang mustahil dirender
-
-```ts
-// health ratio bisa Infinity (utang nol). SVG tidak bisa merender Infinity.
-const safeBps  = Number.isFinite(healthRatioBps) ? healthRatioBps : VISUAL_CAP_BPS;
-const fraction = Math.max(0, Math.min(1, safeBps / VISUAL_CAP_BPS));
-```
-
-Fungsi murni lo **memang** mengembalikan `Infinity` untuk utang nol — itu benar secara matematis. Lapisan render yang wajib menanganinya. Clamp tiap nilai yang masuk ke geometri.
-
-### 8.8 Geometri dihitung sekali di atas, bukan inline di markup
-
-```tsx
-const strokeWidth   = 14;
-const radius        = (size - strokeWidth) / 2;
-const circumference = 2 * Math.PI * radius;
-const center        = size / 2;
-```
-
-Markup jadi terbaca sebagai struktur, bukan sebagai kalkulator.
-
-### 8.9 Token warna, dan `tabular-nums` untuk angka yang berubah
-
-```tsx
-stroke="var(--color-sage)"                       // ✅ token, bukan #7A9B76
-<span className="text-5xl tabular-nums">          // ✅ angka tidak bergoyang saat berubah
-```
-
-`tabular-nums` penting khusus di produk ini: Health Ratio berubah **saat direkam video**. Tanpa itu, angkanya bergeser tiap render dan terlihat murah.
-
-### 8.10 Komentar di JSX untuk elemen yang niatnya tidak kelihatan
-
-```tsx
-{/* Tanda Guard Trigger — penanda referensi yang tenang, bukan alarm. */}
-<div className="pointer-events-none absolute inset-0" style={{ transform: ... }}>
-```
-
-### 8.11 Tiap klaim di layar punya sumber
-
-```tsx
-// ❌ angka yang tidak jelas datang dari mana
-<Stat label="Coupon rate" value="4.50%" />
-
-// ✅ datang dari kontrak, atau tidak ditampilkan sama sekali
-<Stat label="Coupon rate" value={fmtBps(position.couponRateBps)} />
-```
-
-Kalau sebuah field tidak bisa dilacak balik ke pembacaan kontrak, **jangan tampilkan**. Field yang tidak pernah terisi lalu me-render nilai seed adalah cara UI berbohong tanpa ada yang berniat bohong.
-
-Dan tiap baris Capability Matrix wajib punya `transactionLink` nyata **atau** pernyataan eksplisit bahwa fungsinya tidak ada.
-
-### 8.12 Copy adalah kode. Test-kan.
-
-```ts
-test("nol istilah terlarang muncul di render", () => {
-  const banned = ['private', 'hidden', 'invisible', 'encrypted', 'shadow'];
-});
-test("tiap string suara Defral first-person", () => { /* diawali "Saya " */ });
-```
-
-String yang salah merusak submission lebih cepat daripada bug.
-
-### 8.13 Deterministik: nol `Math.random()`, nol `new Date()` saat render
-
-```ts
-export function rng(seed: number): () => number    // ✅ seeded
-```
-
-Lo akan merekam video **dua kali**. Kalau posisi dot halftone atau burst berubah tiap render, take kedua tidak cocok dengan take pertama.
-
-### 8.14 Empat state per layar — semuanya dirancang
-
-| State | Yang ditampilkan |
-|---|---|
-| Loading | skeleton, bukan spinner kosong |
-| Empty | apa yang harus dilakukan user berikutnya |
-| Error | apa yang gagal dan apa yang bisa dicoba |
-| Sukses | datanya |
-
-Juri membuka UI dalam keadaan yang tidak lo antisipasi. Empty state yang dirancang terlihat seperti produk; layar putih terlihat seperti bug.
-
-### 8.15 Parachute mode wajib jalan
-
-`npm run dev` tanpa env backend **harus** menceritakan seluruh cerita dengan data mock. Penjurian berlangsung berhari-hari setelah demo; kalau backend mati saat juri membuka link, mode mock yang menyelamatkan submission.
-
-Konsekuensi untuk kode: **tiap pembacaan data punya sumber mock yang setara**, dan modenya dipilih di **satu** tempat, bukan dicek di 20 komponen.
-
-### 8.16 Gejala agent lo menghasilkan kode buruk
-
-| Gejala | Perbaikan |
-|---|---|
-| Math di dalam JSX | Pindah ke `lib/`, kasih test |
-| Ternary bersarang untuk style per-state | Peta `Record<Union, string>` |
-| Komponen `fetch` sendiri | Angkat ke store |
-| Angka ajaib di style | Konstanta bernama + alasannya |
-| Warna hardcoded `#7A9B76` | Token CSS var |
-| String klaim tanpa test | Test-kan (§8.12) |
-| `useEffect` tanpa cleanup | Tambahkan, atau jangan pakai effect |
-| Empty state = layar putih | Rancang keempat state |
-
----
-
-### 8.17 Tulis untuk mainnet, tampilkan testnet
-
-| Aturan | Kenapa |
-|---|---|
-| **Nama chain, alamat, dan URL explorer dari config** | Pindah ke mainnet = satu file config. Nol string `sepolia` tersebar di komponen |
-| **Nol asumsi "ini cuma demo" di copy** | Kalimat seperti *"nilai demo"* atau *"testnet"* harus datang dari satu banner yang bisa dimatikan, bukan ditulis di sepuluh tempat |
-| **Tautan bukti selalu dari `transactionLink`** | Docs: transaksi sponsored **tidak muncul di riwayat wallet**. Yang otoritatif adalah hash yang KeeperHub laporkan, dibuka langsung, lalu lihat tab **Logs / Internal Transactions / Token Transfers** |
-| **Format angka mengikuti desimal token dari kontrak** | dUSD 6 desimal sekarang, USDC 6 desimal di mainnet — tapi jangan hardcode `1e6`, baca `decimals()` |
-
-> 🔴 **Satu hal yang WAJIB ada di UI dan sering dilupakan:** saat menampilkan tautan transaksi, sertakan satu baris — *"transaksi ini disponsori: kolom `From` di explorer adalah relayer, aksi kami berjalan sebagai internal call. Lihat tab Logs."* Tanpa itu, juri membuka tautan dan mengira tidak terjadi apa-apa.
-
----
-
-## 9. 🔴 ATURAN DESAIN YANG MENGIKAT — turunan audit implementasi pendahulu
-
-Tujuh aturan di bawah ini **bukan saran**. **K1 adalah pole terpanjang di frontend dan tidak ada yang menyangkanya — baca duluan.**
-
-
-### K1. 🔴🔴 COPY PRIVASI DI-PIN OLEH TEST. Lo bakal ketemu test merah.
-
-**Ini pole terpanjang di frontend dan gak ada yang nyangka.** Pas lo purge copy privasi (§3), test yang diwarisi **GAGAL**:
-
-| Test | Yang di-pin |
-|---|---|
-| `Landing.test.ts` | assert **nol** string terlarang §3.1 muncul di render |
-| `strategies.test.ts` | assert **tiap** string suara Defral first-person (§3.4) |
-| `CapabilityMatrix.test.ts` | assert **tiap** baris punya `transactionLink` **atau** pernyataan fungsi-tidak-ada — nol baris kosong |
-
-**Update test-nya bareng copy-nya, dalam commit yang sama.** Jangan skip test — juri jalanin `pnpm test`.
-
-### K2. Copy pengganti — framing TEMPORAL, jangan pernah selective-disclosure
-
-| Opsi | Verdict |
-|---|---|
-| **Temporal** — *"ia tidak pernah menjadi likuidasi"*, *"Anda tidur melewatinya"* | ✅ **PAKAI INI** |
-| Selective-disclosure — nyinggung ZK / private mempool | ❌ **JANGAN.** Mengklaim privasi yang belum dibangun, di chain yang tidak punya privasi, adalah **cara tercepat kehilangan juri yang membuka BaseScan** |
-
-Plus satu baris jujur: **Base Sepolia itu publik.**
-
-### K3. 🔴 Diagram DEFENCE WINDOW — taruh di Landing, ini penjelas produk terbaik
-
-```
-16667 bps ← posisi lo sekarang
-          │
-13000 bps ← Guard Trigger — agent bertindak di bawah ini
-          │   ◀━━━━ DEFENCE WINDOW (2000 bps)
-          │         Seluruh tugas reserve: jaga lo keluar dari sini
-11000 bps ← LIKUIDASI — siapa pun boleh menyita collateral lo
-```
-
-**`11000 bps` ADALAH "$110 lawan $100".** Itu model mental tim sendiri, dirender persis. **Menjelaskan produk ke juri dalam lima detik.**
-
-### K4. 🔴 `setGuardTrigger` dan toggle Coupon Sweep — HIDUPKAN LAGI
-
-Di implementasi pendahulu, `GuardPolicy` **immutable** (nol choice), jadi dua kontrol yang sudah ter-ship diam-diam tidak melakukan apa-apa: `setGuardTrigger` no-op di live mode, dan toggle Coupon Sweep disembunyikan.
-
-Kontrak EVM punya **`setPolicy()`**. **Dua kontrol yang sudah ter-ship dan terlihat itu jadi hidup.** Buang cabang no-op, buang kondisi yang nyembunyiin.
-
-### K5. Collateral kedua di UI — bukti klaim "dalam bentuk apapun"
-
-Kontrak daftarin **dua** collateral: `dUST` (treasury, yield) dan **`mXAU` (emas, non-yield)**.
-
-Tunjukin **engine yang sama** melindungi dua-duanya. Buat emas, panel Coupon Sweep bilang *"instrumen ini tidak membayar yield — sweep tidak aktif"* — **bukan error, bukan disembunyikan.**
-
-### K6. Copy: "auto-rebalancing" → **"autonomous deleveraging"**
-
-Ganti di semua copy. Yang dibangun mengecilkan penyebut dan tidak pernah menyentuh pembilang.
-
-### K7. Field yang gak akan pernah keisi — hapus dari UI
-
-Di implementasi pendahulu, `CollateralState` punya field `couponRateBps` dan `maturity` yang **tidak pernah diisi dari backend** — live mode me-render seed mock (450bps, 2030) **seolah-olah itu state ledger, selamanya.** Jangan ulangi: setiap field yang ditampilkan harus datang dari kontrak, atau tidak usah ditampilkan.
-
-`maturity` juga **dead field di Daml** — di-set 4 tempat, dibaca nol choice. **Hapus dari UI**, atau ambil beneran dari kontrak.
-
----
-
-## 10. Prompt awal buat Claude lo
-
-```
-Baca dua dokumen ini lengkap, urut:
-  1. D:\defral\PRD-defral.md   — APA dan KENAPA. Fokus §1 (write-up), §2 (masalah), §4 (tesis), §17 (FAQ).
-  2. D:\defral\FE\plan.md      — GIMANA.
-
-Requirement yang lo tutup: F3, F4, F5, B1, D3, D5, D7, plus Goal 1 dan Goal 2. Tabelnya di plan §0.5.
-
-Urutan kerja:
-  1. plan §3 — klaim yang boleh dan tidak boleh dibuat. BACA DULUAN, ini nentuin tiap string
-     yang lo tulis setelahnya.
-  2. plan §2 — repo + commit hygiene.
-  3. plan §4.1 — Capability Matrix pakai fixture. Ini komponen paling penting di UI.
-  4. plan §5 — video. Ini deliverable terpenting lo, dan shot list-nya sudah lengkap.
-
-Baca plan §9 (ATURAN DESAIN YANG MENGIKAT).
-
-Aturan keras:
-- Nol string terlarang §3.1 di seluruh UI. Tulis test yang menegakkannya.
-- Tiap baris Capability Matrix WAJIB punya bukti: transactionLink nyata, atau pernyataan
-  eksplisit bahwa fungsinya tidak ada di ABI. Nol baris tanpa bukti.
-- Halaman /proof baca JSON statik ter-commit, bukan API live. Juri menilai 17-20 Agt,
-  transaksi kita 11-12 Agt, dan retensi log KeeperHub free-tier tidak terverifikasi.
-- Video: nol beat menampilkan UI tanpa transaksi di sebelahnya.
-```
+**Can the demo vault get a NAV drop during the recording window, or does it stay healthy?** It changes what the dashboard shows in the video. If it stays healthy, the video's rescue beat has to come from the rehearsal vault's transaction, and we narrate the demo vault as the untouched position a judge can verify. Both work, but the shot list differs and we should not discover that while recording.
