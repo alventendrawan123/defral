@@ -7,75 +7,71 @@ export const evmAddressSchema = z
 
 export const receiptStatusSchema = z.enum(['verified', 'reverted', 'unconfirmed']);
 
-export const collateralSchema = z.object({
-  symbol: z.string().min(1),
-  address: evmAddressSchema,
-  decimals: z.number().int().min(0).max(36),
-  quantity: z.number().nonnegative(),
-  price: z.number().nonnegative(),
-  paysYield: z.boolean(),
+export const proofEntrySchema = z
+  .object({
+    id: z.string().min(1),
+    rank: z.number().int().positive(),
+    title: z.string().min(1),
+    claim: z.string().min(1),
+    caller: evmAddressSchema,
+    callerRole: z.string().min(1),
+    target: evmAddressSchema,
+    targetLabel: z.string().min(1),
+    kind: z.enum(['transaction', 'execution-record']),
+    contractError: z.string().nullable(),
+    executionId: z.string().min(1).nullable(),
+    transactionLink: z.url().nullable(),
+    receiptStatus: receiptStatusSchema,
+    blockNumber: z.number().int().positive().nullable(),
+    gasUsed: z.number().int().positive().nullable(),
+    isSponsored: z.boolean(),
+    reading: z.string().min(1),
+  })
+  .refine((entry) => (entry.kind === 'transaction') === (entry.transactionLink !== null), {
+    message: 'a transaction entry needs a link, and an execution record must not have one',
+    path: ['transactionLink'],
+  })
+  .refine((entry) => entry.kind === 'transaction' || entry.executionId !== null, {
+    message: 'an execution record must carry its executionId',
+    path: ['executionId'],
+  });
+
+const uintStringSchema = z.string().regex(/^\d+$/);
+
+export const chainSnapshotSchema = z.object({
+  vault: evmAddressSchema,
+  blockNumber: uintStringSchema,
+  position: z.object({
+    borrower: evmAddressSchema,
+    outstanding: uintStringSchema,
+    collateralAmount: uintStringSchema,
+    triggerBps: z.number().int().positive(),
+    targetBps: z.number().int().positive(),
+    maxRepayPerEvent: uintStringSchema,
+    isCouponSweepEnabled: z.boolean(),
+    reserve: uintStringSchema,
+    lastActedRound: uintStringSchema,
+    isAgentRevoked: z.boolean(),
+  }),
+  guardRepayQuote: uintStringSchema,
+  couponDue: uintStringSchema,
+  healthRatioBps: z.number().int().nonnegative(),
+  liquidationBps: z.number().int().positive(),
+  maxStaleSeconds: z.number().int().positive(),
+  tokens: z.object({
+    debtDecimals: z.number().int().nonnegative(),
+    collateralDecimals: z.number().int().nonnegative(),
+  }),
+  oracle: z.object({
+    roundId: uintStringSchema,
+    price: uintStringSchema,
+    decimals: z.number().int().nonnegative(),
+    updatedAtSeconds: z.number().int().positive(),
+  }),
 });
 
-export const guardPolicySchema = z.object({
-  triggerRatioBps: z.number().int().positive(),
-  targetRatioBps: z.number().int().positive(),
-  maxRepayPerEvent: z.number().nonnegative(),
-  isCouponSweepEnabled: z.boolean(),
+export const proofArchiveSchema = z.object({
+  sourceFiles: z.array(z.string().min(1)).min(1),
+  readAt: z.string().min(1),
+  entries: z.array(proofEntrySchema).min(1),
 });
-
-export const positionSchema = z.object({
-  owner: evmAddressSchema,
-  collateral: collateralSchema,
-  debt: z.number().nonnegative(),
-  reserve: z.number().nonnegative(),
-  policy: guardPolicySchema,
-  isAgentRevoked: z.boolean(),
-  lastActedRound: z.number().int().nonnegative(),
-});
-
-export const rescueEventSchema = z.object({
-  id: z.string().min(1),
-  timestamp: z.number().int().nonnegative(),
-  kind: z.enum(['guard-repay', 'coupon-sweep', 'no-op', 'liquidation']),
-  note: z.string().min(1),
-  amount: z.number().nullable(),
-  ratioBeforeBps: z.number().nullable(),
-  ratioAfterBps: z.number().nullable(),
-  price: z.number().nullable(),
-  transactionLink: z.url().nullable(),
-});
-
-export const executionSchema = z.object({
-  executionId: z.string().min(1),
-  attackName: z.string().min(1),
-  idempotencyKey: z.string().min(1),
-  wouldRevert: z.boolean(),
-  revertReason: z.string().nullable(),
-  receiptStatus: receiptStatusSchema,
-  gasUsed: z.number().nullable(),
-  transactionLink: z.url().nullable(),
-  isSponsored: z.boolean(),
-});
-
-export const pricePointSchema = z.object({
-  timestamp: z.number().int().nonnegative(),
-  price: z.number().nonnegative(),
-});
-
-export const outcomeComparisonSchema = z.object({
-  id: z.string().min(1),
-  label: z.string().min(1),
-  isGuarded: z.boolean(),
-  outcome: z.enum(['rescued', 'liquidated']),
-  openingRatioBps: z.number().int().positive(),
-  stressPrice: z.number().positive(),
-  collateralSeized: z.number().nullable(),
-  amountRepaid: z.number().nullable(),
-  note: z.string().min(1),
-  transactionLink: z.url().nullable(),
-});
-
-export const rescueEventListSchema = z.array(rescueEventSchema);
-export const executionListSchema = z.array(executionSchema);
-export const pricePointListSchema = z.array(pricePointSchema);
-export const outcomeComparisonListSchema = z.array(outcomeComparisonSchema);

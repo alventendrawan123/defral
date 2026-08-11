@@ -1,0 +1,31 @@
+{
+  "vault": "0x4f634d7173eFf255973E762c3Fe04DF4887FfB35",
+  "blockNumber": "45324208",
+  "position": {
+    "borrower": "0x0a25a241Ad0c397136dE68ccF2D9fC1EC68Dc7f2",
+    "outstanding": "6000000000",
+    "collateralAmount": "10000000000000000000000",
+    "triggerBps": 13000,
+    "targetBps": 14500,
+    "maxRepayPerEvent": "2000000000",
+    "isCouponSweepEnabled": true,
+    "reserve": "3000000000",
+    "lastActedRound": "0",
+    "isAgentRevoked": false
+  },
+  "guardRepayQuote": "0",
+  "couponDue": "112500000",
+  "healthRatioBps": 16667,
+  "liquidationBps": 11000,
+  "maxStaleSeconds": 3600,
+  "tokens": {
+    "debtDecimals": 6,
+    "collateralDecimals": 18
+  },
+  "oracle": {
+    "roundId": "3",
+    "price": "100000000",
+    "decimals": 8,
+    "updatedAtSeconds": 1786384066
+  }
+}
