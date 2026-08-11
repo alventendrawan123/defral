@@ -68,9 +68,9 @@ async function fetchSnapshotFromBackend(): Promise<VaultSnapshot> {
   const observedAtSeconds: number = d.observedAtSeconds ?? Math.floor(Date.now() / 1000);
 
   return {
-    vault: d.vault,
+    vault: d.vault as `0x${string}`,
     position: {
-      borrower: d.position.borrower,
+      borrower: d.position.borrower as `0x${string}`,
       outstanding: BigInt(d.position.outstanding),
       collateralAmount: BigInt(d.position.collateralAmount),
       triggerBps: d.position.triggerBps,
