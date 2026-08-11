@@ -20,7 +20,7 @@ export default async function Container() {
 
       {snapshot.source === 'committed-snapshot' ? (
         <p className="rounded-md border border-line-soft bg-surface-sunken px-4 py-2 text-sm text-ink-muted">
-          {SNAPSHOT_NOTICE} Block {snapshot.blockNumber?.toString()}.
+          {SNAPSHOT_NOTICE}{snapshot.blockNumber ? ` Block ${snapshot.blockNumber.toString()}.` : ''}
         </p>
       ) : null}
 
