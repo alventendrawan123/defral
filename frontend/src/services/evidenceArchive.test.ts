@@ -1,28 +1,51 @@
 import { describe, expect, it } from 'vitest';
 
-import { readArchivedExecutions, readArchivedOutcomes } from '@/services/evidenceArchive';
+import { readArchiveSourceFiles, readProofArchive } from '@/services/evidenceArchive';
 
-describe('committed evidence archive', () => {
-  it('parses every archived execution', () => {
-    expect(readArchivedExecutions().length).toBeGreaterThan(0);
+const entries = readProofArchive();
+
+describe('committed proof archive', () => {
+  it('parses and is not empty', () => {
+    expect(entries.length).toBeGreaterThan(0);
   });
 
-  it('records a revert reason whenever a simulate would revert', () => {
-    const missing = readArchivedExecutions().filter(
-      (execution) => execution.wouldRevert && !execution.revertReason,
+  it('leads with the deployer being refused, the strongest authority claim', () => {
+    expect(entries[0].id).toBe('not-agent');
+    expect(entries[0].contractError).toContain('NotAgent');
+    expect(entries[0].transactionLink).not.toBeNull();
+  });
+
+  it('never offers a transaction link for an agent refusal', () => {
+    const linkedRecords = entries.filter(
+      (entry) => entry.kind === 'execution-record' && entry.transactionLink !== null,
     );
-    expect(missing).toEqual([]);
+    expect(linkedRecords).toEqual([]);
   });
 
-  it('carries both sides of the liquidation comparison', () => {
-    const outcomes = readArchivedOutcomes();
-    expect(outcomes.filter((outcome) => outcome.isGuarded)).toHaveLength(1);
-    expect(outcomes.filter((outcome) => !outcome.isGuarded)).toHaveLength(1);
+  it('gives every execution record its executionId and decoded error', () => {
+    entries
+      .filter((entry) => entry.kind === 'execution-record')
+      .forEach((entry) => {
+        expect(entry.executionId).toBeTruthy();
+        expect(entry.contractError).toBeTruthy();
+      });
   });
 
-  it('shows a seizure only on the unguarded side', () => {
-    const outcomes = readArchivedOutcomes();
-    expect(outcomes.find((outcome) => outcome.isGuarded)?.collateralSeized).toBeNull();
-    expect(outcomes.find((outcome) => !outcome.isGuarded)?.outcome).toBe('liquidated');
+  it('gives every mined transaction a block number', () => {
+    entries
+      .filter((entry) => entry.kind === 'transaction')
+      .forEach((entry) => {
+        expect(entry.blockNumber).toBeGreaterThan(0);
+      });
+  });
+
+  it('discloses which vault each entry ran against', () => {
+    entries.forEach((entry) => {
+      expect(entry.targetLabel).toMatch(/demo vault|rehearsal vault/);
+    });
+  });
+
+  it('names the committed files every entry was derived from', () => {
+    expect(readArchiveSourceFiles().every((file) => file.startsWith('docs/evidence/'))).toBe(true);
   });
 });

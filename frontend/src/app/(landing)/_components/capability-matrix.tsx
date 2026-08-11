@@ -1,5 +1,5 @@
 import { ReceiptChip } from '@/components/ui/ReceiptChip';
-import { CAPABILITY_COPY, SPONSORED_TX_NOTICE } from '@/constants/copy';
+import { CAPABILITY_COPY, REFUSAL_DISCLOSURE, SPONSORED_TX_NOTICE } from '@/constants/copy';
 import type { CapabilityEvidence, CapabilityRow } from '@/types';
 
 const ANSWER_CLASS: Record<CapabilityRow['answer'], string> = {
@@ -15,37 +15,46 @@ const ANSWER_LABEL: Record<CapabilityRow['answer'], string> = {
 function EvidenceCell({ evidence }: { evidence: CapabilityEvidence }) {
   if (evidence.kind === 'transaction') {
     return (
-      <span className="inline-flex flex-wrap items-center gap-2">
-        <a
-          href={evidence.transactionLink}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-mono text-xs underline underline-offset-2"
-        >
-          transaction
-        </a>
-        <ReceiptChip status={evidence.receiptStatus} isSponsored />
+      <span className="flex flex-col gap-1">
+        <span className="inline-flex flex-wrap items-center gap-2">
+          <a
+            href={evidence.transactionLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-mono text-xs underline underline-offset-2"
+          >
+            transaction
+          </a>
+          <ReceiptChip status={evidence.receiptStatus} isSponsored={evidence.receiptStatus === 'verified'} />
+        </span>
+        {evidence.onRehearsalVault ? (
+          <span className="text-xs text-ink-muted">{CAPABILITY_COPY.rehearsalLabel}</span>
+        ) : null}
       </span>
     );
   }
 
-  if (evidence.kind === 'absent-from-abi') {
+  if (evidence.kind === 'execution-record') {
     return (
       <span className="flex flex-col gap-1">
-        <span className="font-mono text-xs font-semibold uppercase text-ink">
-          {CAPABILITY_COPY.absentLabel}
+        <span className="inline-flex w-fit items-center rounded-full border border-line-soft bg-surface-sunken px-2.5 py-0.5 font-mono text-xs text-ink-muted">
+          {CAPABILITY_COPY.executionRecordLabel}
         </span>
-        <span className="text-xs text-ink-muted">{evidence.statement}</span>
+        <span className="font-mono text-xs font-semibold text-critical">
+          {evidence.contractError}
+        </span>
+        <span className="break-all font-mono text-xs text-ink-muted">{evidence.executionId}</span>
+        <span className="text-xs text-ink-muted">{CAPABILITY_COPY.noTransactionNote}</span>
       </span>
     );
   }
 
   return (
     <span className="flex flex-col gap-1">
-      <span className="inline-flex w-fit items-center rounded-full border border-defending bg-defending-soft px-2.5 py-0.5 font-mono text-xs text-defending">
-        {CAPABILITY_COPY.pendingLabel}
+      <span className="font-mono text-xs font-semibold uppercase text-ink">
+        {CAPABILITY_COPY.absentLabel}
       </span>
-      <span className="text-xs text-ink-muted">{evidence.expectedProof}</span>
+      <span className="text-xs text-ink-muted">{evidence.statement}</span>
     </span>
   );
 }
@@ -122,7 +131,10 @@ export function CapabilityMatrix({ rows }: CapabilityMatrixProps) {
         ))}
       </ul>
 
-      <p className="max-w-prose text-xs text-ink-muted">{SPONSORED_TX_NOTICE}</p>
+      <div className="flex flex-col gap-2">
+        <p className="max-w-prose text-xs text-ink-muted">{REFUSAL_DISCLOSURE}</p>
+        <p className="max-w-prose text-xs text-ink-muted">{SPONSORED_TX_NOTICE}</p>
+      </div>
     </section>
   );
 }

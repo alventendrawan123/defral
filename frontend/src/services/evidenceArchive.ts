@@ -1,12 +1,12 @@
-import executionsArchive from '@/../docs/evidence/executions.json';
-import outcomesArchive from '@/../docs/evidence/outcomes.json';
-import { executionListSchema, outcomeComparisonListSchema } from '@/services/schemas';
-import type { ExecutionView, OutcomeComparisonRow } from '@/types';
+import proofArchive from '@/../docs/evidence/proof-archive.json';
+import { proofArchiveSchema } from '@/services/schemas';
+import type { ProofEntry } from '@/types';
 
-export function readArchivedExecutions(): ExecutionView[] {
-  return executionListSchema.parse(executionsArchive);
+export function readProofArchive(): ProofEntry[] {
+  const parsed = proofArchiveSchema.parse(proofArchive);
+  return [...parsed.entries].sort((a, b) => a.rank - b.rank);
 }
 
-export function readArchivedOutcomes(): OutcomeComparisonRow[] {
-  return outcomeComparisonListSchema.parse(outcomesArchive);
+export function readArchiveSourceFiles(): string[] {
+  return proofArchiveSchema.parse(proofArchive).sourceFiles;
 }
