@@ -1,13 +1,77 @@
 import { readCommittedSnapshot } from '@/services/chain/snapshot';
 import { readVaultSnapshot } from '@/services/chain/vaultReads';
+import { isBackendMode, PUBLIC_ENV } from '@/constants/env';
 import type { AgentPosture, VaultSnapshot } from '@/types';
 
 export async function loadVaultSnapshot(): Promise<VaultSnapshot> {
+  if (isBackendMode()) {
+    try {
+      return await fetchSnapshotFromBackend();
+    } catch {
+      // Backend unreachable — fall through to direct RPC then committed snapshot
+    }
+  }
   try {
     return await readVaultSnapshot();
   } catch {
     return readCommittedSnapshot();
   }
+}
+
+/**
+ * Fetch vault snapshot from the backend HTTP API.
+ * The backend returns bigints as decimal strings (JSON limitation) —
+ * convert them back to BigInt before returning to match VaultSnapshot type.
+ */
+async function fetchSnapshotFromBackend(): Promise<VaultSnapshot> {
+  const url = `${PUBLIC_ENV.NEXT_PUBLIC_API_URL}/api/position`;
+  const res = await fetch(url, {
+    // Next.js 13 ISR — revalidate every 30 seconds
+    next: { revalidate: 30 },
+  } as RequestInit);
+
+  if (!res.ok) {
+    throw new Error(`Backend /api/position returned ${res.status}`);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const d = await res.json() as any;
+  const observedAtSeconds: number = d.observedAtSeconds ?? Math.floor(Date.now() / 1000);
+
+  return {
+    vault: d.vault,
+    position: {
+      borrower: d.position.borrower,
+      outstanding: BigInt(d.position.outstanding),
+      collateralAmount: BigInt(d.position.collateralAmount),
+      triggerBps: d.position.triggerBps,
+      targetBps: d.position.targetBps,
+      maxRepayPerEvent: BigInt(d.position.maxRepayPerEvent),
+      isCouponSweepEnabled: d.position.isCouponSweepEnabled,
+      reserve: BigInt(d.position.reserve),
+      lastActedRound: BigInt(d.position.lastActedRound),
+      isAgentRevoked: d.position.isAgentRevoked,
+    },
+    guardRepayQuote: BigInt(d.guardRepayQuote),
+    couponDue: BigInt(d.couponDue),
+    healthRatioBps: d.healthRatioBps,
+    liquidationBps: d.liquidationBps,
+    maxStaleSeconds: d.maxStaleSeconds,
+    oracle: {
+      roundId: BigInt(d.oracle.roundId),
+      price: BigInt(d.oracle.price),
+      decimals: d.oracle.decimals,
+      updatedAtSeconds: d.oracle.updatedAtSeconds,
+      ageSeconds: d.oracle.ageSeconds,
+    },
+    tokens: {
+      debtDecimals: d.tokens.debtDecimals,
+      collateralDecimals: d.tokens.collateralDecimals,
+    },
+    observedAtSeconds,
+    blockNumber: d.blockNumber ? BigInt(d.blockNumber) : undefined,
+    source: 'chain',
+  };
 }
 
 export function resolveAgentPosture(snapshot: VaultSnapshot): AgentPosture {

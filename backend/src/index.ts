@@ -19,12 +19,14 @@ import express, {
   type NextFunction,
 } from 'express';
 import rateLimit from 'express-rate-limit';
+import { apiReference } from '@scalar/express-api-reference';
 
 import {
   evmLedgerConfigFromEnv,
   fetchPositionView,
   fetchRescueEvents,
 } from './evm-ledger.js';
+import { openApiSpec } from './openapi.js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -72,6 +74,24 @@ export function createApp() {
     };
 
   const cfg = evmLedgerConfigFromEnv();
+
+  // ── GET /openapi.json ────────────────────────────────────────────────────
+
+  app.get('/openapi.json', (_req, res) => {
+    res.json(openApiSpec);
+  });
+
+  // ── GET /docs — Scalar API reference UI ──────────────────────────────────
+
+  app.use(
+    '/docs',
+    apiReference({
+      spec: { url: '/openapi.json' },
+      theme: 'default',
+      layout: 'modern',
+      defaultHttpClient: { targetKey: 'js', clientKey: 'fetch' },
+    }),
+  );
 
   // ── GET /api/position ─────────────────────────────────────────────────────
 

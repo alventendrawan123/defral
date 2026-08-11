@@ -6,10 +6,10 @@ import {
   REHEARSAL_DISCLOSURE,
   SPONSORED_TX_NOTICE,
 } from '@/constants/copy';
-import { readArchiveSourceFiles, readProofArchive } from '@/services/evidenceArchive';
+import { readArchiveSourceFiles, readProofArchiveLive } from '@/services/evidenceArchive';
 
-export default function Container() {
-  const entries = readProofArchive();
+export default async function Container() {
+  const entries = await readProofArchiveLive();
   const sourceFiles = readArchiveSourceFiles();
 
   return (

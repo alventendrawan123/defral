@@ -12,9 +12,11 @@
     "prove": "node --import tsx/esm scripts/prove.ts"
   },
   "dependencies": {
+    "@scalar/express-api-reference": "^0.10.13",
     "dotenv": "^17.4.2",
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
+    "openapi3-ts": "^4.6.1",
     "viem": "^2.55.13",
     "zod": "^3.25.76"
   },
