@@ -20,10 +20,12 @@ Base Sepolia is a public chain. Every storage slot and every event log this prod
 | MockUSD (dUSD, 6dp)       | [`0x9d9734fbb490b603a27f82ec0e23cdfdd9d6b838`](https://sepolia.basescan.org/address/0x9d9734fbb490b603a27f82ec0e23cdfdd9d6b838) |
 | MockTreasury (dUST, 18dp) | [`0x0a72124d5e606ab4264a653b6942738cbabd2d43`](https://sepolia.basescan.org/address/0x0a72124d5e606ab4264a653b6942738cbabd2d43) |
 
-| Actor                         | Address                                                                                                                         |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Actor                         | Address |
+|---|---|
 | agentExecutor (KeeperHub EOA) | [`0x5515844B92dD96C3298Fd7d62Fb87cEE279F18D3`](https://sepolia.basescan.org/address/0x5515844B92dD96C3298Fd7d62Fb87cEE279F18D3) |
-| borrower demo                 | `0x0a25a241Ad0c397136dE68ccF2D9fC1EC68Dc7f2`                                                                                    |
+| borrower demo                 | `0x0a25a241Ad0c397136dE68ccF2D9fC1EC68Dc7f2` |
+| NAV publisher                 | `0x104bd087D5e4767370D8569A32B2DD986c3b1c4A` |
+| deployer / pool owner         | `0xe2d3B7FEA35Ea3B7B8d530cfF58a8227ce62BFAD` |
 
 ---
 
@@ -39,9 +41,11 @@ Base Sepolia is a public chain. Every storage slot and every event log this prod
 | `frontend/docs/evidence/`  | Committed execution archive that `/proof` reads                       |
 | `docs/abi/`                | Contract ABIs — shared by frontend and backend                        |
 | `docs/evidence/`           | Archived prove run JSON — committed, readable after log expiry        |
-| `docs/CONTRACTS.md`        | Contract addresses, function selectors, canonical numbers             |
-| `docs/INTEGRATION.md`      | Full integration plan for all three layers                            |
-| `docs/PROVENANCE.md`       | What was carried over from Cermin-RWA and what changed                |
+| `docs/CONTRACTS.md`        | Contract addresses, function selectors, canonical numbers |
+| `docs/INTEGRATION.md`      | Integration status across all three layers |
+| `docs/FRONTEND-FIXES.md`   | Remaining frontend fixes for bima |
+| `docs/video-plan.md`       | Demo video shot list and recording checklist |
+| `docs/PROVENANCE.md`       | What was carried over from Cermin-RWA and what changed |
 
 ---
 
@@ -143,6 +147,14 @@ Eight things the agent might do — each row has a transaction or an explicit st
 ### `/proof` page
 
 Reads a JSON archive committed to this repository (`frontend/docs/evidence/proof-archive.json`). Works after execution logs expire. In backend mode (`NEXT_PUBLIC_API_URL` set), fetches live `Rescued` events from `GET /api/events`.
+
+### Key transactions on Base Sepolia
+
+| Event | Transaction |
+|---|---|
+| Successful rescue (rehearsal vault) | [`0xb8f47a89...`](https://sepolia.basescan.org/tx/0xb8f47a89115841e5d0176fd6cd3a0d8d9ec1141baaafde37c4ad11afb3a46c9e) |
+| Deployer refused by demo vault | [`0xb6a01688...`](https://sepolia.basescan.org/tx/0xb6a01688e55ebb71713a01c02b46318b6a71039bc79e155d1fd90e957700139d) |
+| Agent EOA dUSD balance = 0 | [BaseScan token tab](https://sepolia.basescan.org/token/0x9D9734fBb490b603A27f82ec0e23cDfDD9D6b838?a=0x5515844B92dD96C3298Fd7d62Fb87cEE279F18D3) |
 
 ### Sponsored transactions
 
