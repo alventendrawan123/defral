@@ -34,8 +34,37 @@ async function fetchSnapshotFromBackend(): Promise<VaultSnapshot> {
     throw new Error(`Backend /api/position returned ${res.status}`);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const d = await res.json() as any;
+  type ApiPositionResponse = {
+    vault: string;
+    blockNumber: string | null;
+    observedAtSeconds: number;
+    healthRatioBps: number;
+    liquidationBps: number;
+    maxStaleSeconds: number;
+    guardRepayQuote: string;
+    couponDue: string;
+    position: {
+      borrower: string;
+      outstanding: string;
+      collateralAmount: string;
+      triggerBps: number;
+      targetBps: number;
+      maxRepayPerEvent: string;
+      isCouponSweepEnabled: boolean;
+      reserve: string;
+      lastActedRound: string;
+      isAgentRevoked: boolean;
+    };
+    oracle: {
+      roundId: string;
+      price: string;
+      decimals: number;
+      updatedAtSeconds: number;
+      ageSeconds: number;
+    };
+    tokens: { debtDecimals: number; collateralDecimals: number };
+  };
+  const d = (await res.json()) as ApiPositionResponse;
   const observedAtSeconds: number = d.observedAtSeconds ?? Math.floor(Date.now() / 1000);
 
   return {
