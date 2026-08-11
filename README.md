@@ -117,14 +117,14 @@ The frontend works with no backend configured — it reads from the committed sn
 
 ```mermaid
 flowchart LR
-    Borrower["Borrower Wallet"] --> FE["Frontend\nNext.js :3000"]
-    FE --> BE["Backend API\nExpress :3001"]
+    Borrower["Borrower Wallet"] --> FE["Frontend"]
+    FE --> BE["Backend API :3001"]
     BE --> RPC["Base Sepolia RPC"]
     BE --> KH["KeeperHub API"]
-    KH --> Agent["Guard Agent\npoll 5 min"]
+    KH --> Agent["Guard Agent"]
     Agent --> Vault["DefralVault"]
     Vault --> Oracle["NavOracle"]
-    Publisher["NAV Publisher\nseparate key"] --> Oracle
+    Publisher["NAV Publisher"] --> Oracle
     Vault --> Pool["MockLendingPool"]
     Pool --> RPC
     RPC --> BE
