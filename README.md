@@ -8,6 +8,17 @@ An autonomous agent watches the oracle and repays part of your debt before your 
 
 Base Sepolia is a public chain. Every storage slot and every event log this product writes is readable by anyone. We make no privacy claim of any kind.
 
+## What It Does
+
+Defral lets a borrower:
+
+- Open a collateralized loan position on MockLendingPool.
+- Deposit a reserve (approval, not transfer — funds stay in the borrower wallet).
+- Set a guard policy: trigger ratio, target ratio, max repay per event, coupon sweep toggle.
+- Watch the autonomous agent poll the NavOracle every 5 minutes.
+- Receive automatic partial repayment when NAV drops below the trigger — no action required.
+- See every rescue, refusal, and non-action in the `/proof` page with real chain artifacts.
+
 ---
 
 ## Addresses (Base Sepolia · chainId 84532)
@@ -101,6 +112,55 @@ pnpm test
 The frontend works with no backend configured — it reads from the committed snapshot in `frontend/docs/evidence/chain-snapshot.json`. Set `NEXT_PUBLIC_API_URL=http://localhost:3001` in `frontend/.env` to connect to a live backend.
 
 ---
+
+## Architecture
+
+```
+User Wallet
+    │
+    ▼
+Frontend (Next.js :3000)
+    │  NEXT_PUBLIC_API_URL
+    ▼
+Backend API (Express :3001) ──── GET /api/position ────► viem multicall
+    │                       ──── GET /api/events   ────► Rescued event log
+    │                       ──── GET /docs         ────► Scalar UI
+    │
+    │  KeeperHub REST API
+    ▼
+Backend Agent (guard loop, poll 5 min)
+    │  guardRepay() / sweepCoupon()
+    ▼
+DefralVault (Base Sepolia)
+    │  re-reads oracle inside same tx
+    ▼
+NavOracle ◄──── NAV publisher (separate key, not agent)
+```
+
+## Components
+
+### Smart contracts (`sc/`)
+
+- Foundry, Solidity 0.8.x.
+- `DefralVault` — one vault per borrower, two zero-argument agent calls.
+- `MockLendingPool` — tracks debt, emits `Rescued` on repay.
+- `NavOracle` — Chainlink-compatible price feed, publisher-controlled.
+- Deployed and verified on Base Sepolia.
+- ABIs exported to `docs/abi/`.
+
+### Backend (`backend/`)
+
+- Guard agent: `async while` loop + `inFlight` overlap guard, KeeperHub REST, viem multicall reads.
+- HTTP API: Express, rate-limited, CORS, Scalar docs at `/docs`.
+- 36 unit tests — zero network calls, zero chain dependency.
+- `pnpm prove` runs the full 8-step proof chain live on Base Sepolia.
+
+### Frontend (`frontend/`)
+
+- Next.js 13 App Router, React 18, Tailwind 3, viem.
+- Server Components with `revalidate = 30` — one RPC round trip per render cycle.
+- Three-tier fallback: backend API → direct RPC → committed snapshot.
+- 53 tests. Type-checked. No float arithmetic between RPC and screen.
 
 ## How it works
 
@@ -226,6 +286,24 @@ NEXT_PUBLIC_RPC_URL=https://base-sepolia-rpc.publicnode.com
 ```
 
 ---
+
+## Integration status
+
+| Integration | Status |
+|---|---|
+| Smart contracts deployed and verified | ✅ Live on Base Sepolia |
+| Backend agent → KeeperHub → vault | ✅ Working, `pnpm prove` 8/8 green |
+| Backend HTTP API + Scalar docs | ✅ Running on `:3001` |
+| Frontend → backend (`/api/position`, `/api/events`) | ✅ Wired |
+| Frontend fallback to committed snapshot | ✅ Working |
+| Prove chain evidence committed | ✅ `docs/evidence/prove-run-*.json` |
+
+## Known issues
+
+- `chain-snapshot.json` needs regeneration after the final prove run — outstanding balance has changed from multiple test rescues.
+- Backend `ALLOWED_ORIGIN` defaults to `http://localhost:3000` — must be updated to the production Vercel URL before judging.
+- Oracle goes stale after every price push; agent refuses with `Refused_StaleOracle` until a fresh NAV is published. The UI shows this state in amber — it is the freshness gate working, not a defect.
+- KeeperHub free tier is 5,000 executions/month — `POLL_MS=300000` (5 min) keeps the demo safely within quota.
 
 ## What we do not claim
 
