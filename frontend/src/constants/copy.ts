@@ -82,25 +82,61 @@ export const HERO_COPY = {
   secondaryAction: 'Read the proof',
 } as const;
 
+export const REHEARSAL_DISCLOSURE =
+  'This defence ran on an identical rehearsal position. Defending the demo position would permanently lower its debt, and a position can only be opened once, so we left it untouched for you to inspect.';
+
+export const REFUSAL_DISCLOSURE =
+  'KeeperHub declines to broadcast a call it predicts will revert, so an agent refusal has no transaction hash. What you get instead is the execution record, carrying the decoded custom error the contract itself returned.';
+
+export const AGENT_KEY_FRAMING =
+  'Our organisation owner can export the agent key, and it changes nothing. The vault accepts exactly two zero argument calls, both re-read the oracle inside the same transaction, and both refuse while the position is healthy.';
+
+export const POSTURE_COPY = {
+  'idle-healthy': {
+    label: 'Armed and idle',
+    body: 'Nothing to pay. The position is above your trigger, so the contract would refuse the agent right now.',
+  },
+  'would-defend': {
+    label: 'Would defend now',
+    body: 'The position is inside the defence window. This is what the contract would repay from your reserve.',
+  },
+  'oracle-stale': {
+    label: 'Price is stale',
+    body: 'The freshness gate is closed, so the contract would refuse to act on this price at all. That is the gate working, not a fault.',
+  },
+  revoked: {
+    label: 'Authority revoked',
+    body: 'You revoked the agent. Your money can now only move to you.',
+  },
+} as const;
+
+export const SNAPSHOT_NOTICE =
+  'The live node did not answer, so this is the committed snapshot. Every figure below was read from the chain at the block shown.';
+
+export const NOTHING_TO_PAY = 'Nothing to pay';
+
+export const DEFRAL_NOTE =
+  'Every figure here was read from the vault contract on Base Sepolia. I do not recompute them, because the contract is the one that decides.';
+
 export const CAPABILITY_COPY = {
   title: 'What the agent can and cannot do',
-  body: 'Every row below ends in a transaction you can open yourself, or in a function that does not exist in the ABI. A reverted transaction is still a transaction: it has a hash, it burned gas, and it is permanent.',
+  body: 'Every row ends in evidence you can check: a mined transaction, an execution record carrying the error the contract returned, or a function that does not exist in the ABI at all.',
   questionHeader: 'Can the agent',
   answerHeader: 'Answer',
   evidenceHeader: 'Evidence',
   yes: 'YES',
   never: 'NEVER',
-  pendingLabel: 'awaiting deployment',
   absentLabel: 'no such function',
+  executionRecordLabel: 'execution record',
+  rehearsalLabel: 'rehearsal vault',
+  noTransactionNote: 'no transaction exists for this refusal',
 } as const;
 
 export const OUTCOME_COPY = {
-  title: 'The same price move, two positions',
-  body: 'One position is guarded, the other is not. Both watch the same oracle round. Open both transactions and compare what is left.',
-  guardedLabel: 'With Defral',
-  unguardedLabel: 'Without Defral',
-  rescued: 'Rescued',
-  liquidated: 'Liquidated',
+  title: 'Two mined transactions, opposite outcomes',
+  body: 'The agent defended a position and it landed. The address that deployed this entire system asked the same vault to move, and it was refused. Both are on Base Sepolia and both are permanent.',
+  defended: 'Defended',
+  refused: 'Refused',
 } as const;
 
 export const PROOF_COPY = {
@@ -111,9 +147,12 @@ export const PROOF_COPY = {
   refusedLabel: 'refused as designed',
 } as const;
 
+export const RESERVE_EXPLAINER =
+  'Your reserve is min(balance, allowance), and it sits in your own wallet. Setting it is an approve, and lowering that approval is how you take it back. The vault has no function that could move it anywhere else.';
+
 export const VAULT_COPY = {
   title: 'Reserve and policy',
-  body: 'Setting your reserve is an approve. Lowering it is how you take it back. We never hold it.',
+  body: 'These values are read from the vault on Base Sepolia. Changing them is a transaction you sign from your own wallet, so this page shows them rather than pretending to set them.',
   triggerLabel: 'Guard Trigger',
   triggerHint: 'The agent acts below this ratio.',
   sweepLabel: 'Coupon sweep',
