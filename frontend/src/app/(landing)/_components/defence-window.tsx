@@ -1,12 +1,13 @@
 import { DEFENCE_WINDOW_LEGEND } from '@/constants/copy';
-import { DEFENCE_WINDOW_BPS, LIQUIDATION_BPS, VISUAL_CAP_BPS } from '@/constants/protocol';
-import { formatBps } from '@/utils/format';
+import { VISUAL_CAP_BPS } from '@/constants/protocol';
+import { formatBpsRaw } from '@/utils/decimals';
 
 const LADDER_HEIGHT_PX = 260;
 
 interface DefenceWindowProps {
   currentRatioBps: number;
   triggerRatioBps: number;
+  liquidationBps: number;
 }
 
 function toOffsetPct(ratioBps: number): number {
@@ -21,7 +22,7 @@ function Marker({ ratioBps, label, tone }: { ratioBps: number; label: string; to
       style={{ top: `${toOffsetPct(ratioBps)}%` }}
     >
       <span className="w-24 shrink-0 text-right font-mono text-xs tabular-nums">
-        {formatBps(ratioBps)}
+        {formatBpsRaw(ratioBps)}
       </span>
       <span className={`h-0.5 flex-1 ${tone}`} />
       <span className="w-56 shrink-0 text-xs text-ink-muted">{label}</span>
@@ -29,10 +30,14 @@ function Marker({ ratioBps, label, tone }: { ratioBps: number; label: string; to
   );
 }
 
-export function DefenceWindow({ currentRatioBps, triggerRatioBps }: DefenceWindowProps) {
+export function DefenceWindow({
+  currentRatioBps,
+  triggerRatioBps,
+  liquidationBps,
+}: DefenceWindowProps) {
   const safeCurrentBps = Number.isFinite(currentRatioBps) ? currentRatioBps : VISUAL_CAP_BPS;
   const windowTopPct = toOffsetPct(triggerRatioBps);
-  const windowBottomPct = toOffsetPct(LIQUIDATION_BPS);
+  const windowBottomPct = toOffsetPct(liquidationBps);
 
   return (
     <section className="flex flex-col gap-5">
@@ -53,14 +58,14 @@ export function DefenceWindow({ currentRatioBps, triggerRatioBps }: DefenceWindo
           tone="bg-defending"
         />
         <Marker
-          ratioBps={LIQUIDATION_BPS}
+          ratioBps={liquidationBps}
           label={DEFENCE_WINDOW_LEGEND.liquidation}
           tone="bg-critical"
         />
       </div>
       <p className="max-w-prose text-sm text-ink-muted">
-        {formatBps(DEFENCE_WINDOW_BPS)} of room. {DEFENCE_WINDOW_LEGEND.window} Borrowing 100
-        against 110 of collateral is exactly {formatBps(LIQUIDATION_BPS)}.
+        {formatBpsRaw(triggerRatioBps - liquidationBps)} of room. {DEFENCE_WINDOW_LEGEND.window}{' '}
+        Borrowing 100 against 110 of collateral is exactly {formatBpsRaw(liquidationBps)}.
       </p>
     </section>
   );

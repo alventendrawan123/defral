@@ -1,76 +1,48 @@
+import { AddressPill } from '@/components/ui/AddressPill';
 import { OUTCOME_COPY } from '@/constants/copy';
-import type { OutcomeComparisonRow, PositionOutcome } from '@/types';
-import { formatBps, formatUsd } from '@/utils/format';
+import type { ProofEntry } from '@/types';
 
-const OUTCOME_CLASS: Record<PositionOutcome, string> = {
-  rescued: 'border-safe bg-safe-soft text-safe',
-  liquidated: 'border-critical bg-critical-soft text-critical',
-};
-
-const OUTCOME_LABEL: Record<PositionOutcome, string> = {
-  rescued: OUTCOME_COPY.rescued,
-  liquidated: OUTCOME_COPY.liquidated,
-};
-
-function OutcomeCard({ row }: { row: OutcomeComparisonRow }) {
-  const amount = row.outcome === 'rescued' ? row.amountRepaid : row.collateralSeized;
-  const amountLabel = row.outcome === 'rescued' ? 'Repaid from reserve' : 'Collateral seized';
+function OutcomeCard({ entry }: { entry: ProofEntry }) {
+  const isRefusal = entry.receiptStatus === 'reverted';
 
   return (
     <article className="flex flex-col gap-4 rounded-lg border-2 border-line bg-surface p-6 shadow-card">
-      <header className="flex flex-col gap-2">
-        <span className="text-xs uppercase tracking-wide text-ink-muted">
-          {row.isGuarded ? OUTCOME_COPY.guardedLabel : OUTCOME_COPY.unguardedLabel}
-        </span>
-        <span
-          className={`w-fit rounded-full border px-3 py-1 font-mono text-sm font-semibold ${OUTCOME_CLASS[row.outcome]}`}
-        >
-          {OUTCOME_LABEL[row.outcome]}
-        </span>
-      </header>
+      <span
+        className={`w-fit rounded-full border px-3 py-1 font-mono text-sm font-semibold ${
+          isRefusal
+            ? 'border-critical bg-critical-soft text-critical'
+            : 'border-safe bg-safe-soft text-safe'
+        }`}
+      >
+        {isRefusal ? OUTCOME_COPY.refused : OUTCOME_COPY.defended}
+      </span>
 
-      <dl className="grid grid-cols-2 gap-3 text-sm">
-        <div>
-          <dt className="text-xs text-ink-muted">Opening ratio</dt>
-          <dd className="font-semibold tabular-nums">{formatBps(row.openingRatioBps)}</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-ink-muted">Stress price</dt>
-          <dd className="font-semibold tabular-nums">{formatUsd(row.stressPrice)}</dd>
-        </div>
-        <div className="col-span-2">
-          <dt className="text-xs text-ink-muted">{amountLabel}</dt>
-          <dd className="font-semibold tabular-nums">
-            {amount === null ? 'none' : formatUsd(amount)}
-          </dd>
-        </div>
-      </dl>
+      <h3 className="text-base font-semibold">{entry.title}</h3>
+      <p className="text-sm text-ink-muted">{entry.reading}</p>
 
-      <p className="text-sm text-ink-muted">{row.note}</p>
+      {entry.contractError ? (
+        <p className="font-mono text-xs font-semibold text-critical">{entry.contractError}</p>
+      ) : null}
 
-      {row.transactionLink ? (
+      <AddressPill address={entry.caller} label="called by" />
+
+      {entry.transactionLink ? (
         <a
-          href={row.transactionLink}
+          href={entry.transactionLink}
           target="_blank"
           rel="noopener noreferrer"
           className="w-fit font-mono text-xs underline underline-offset-2"
         >
           open the transaction
         </a>
-      ) : (
-        <span className="w-fit rounded-full border border-defending bg-defending-soft px-2.5 py-0.5 font-mono text-xs text-defending">
-          awaiting deployment
-        </span>
-      )}
+      ) : null}
     </article>
   );
 }
 
-interface OutcomeComparisonProps {
-  rows: OutcomeComparisonRow[];
-}
+export function OutcomeComparison({ entries }: { entries: ProofEntry[] }) {
+  if (entries.length === 0) return null;
 
-export function OutcomeComparison({ rows }: OutcomeComparisonProps) {
   return (
     <section className="flex flex-col gap-5">
       <div className="flex flex-col gap-2">
@@ -78,8 +50,8 @@ export function OutcomeComparison({ rows }: OutcomeComparisonProps) {
         <p className="max-w-prose text-sm text-ink-muted">{OUTCOME_COPY.body}</p>
       </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {rows.map((row) => (
-          <OutcomeCard key={row.id} row={row} />
+        {entries.map((entry) => (
+          <OutcomeCard key={entry.id} entry={entry} />
         ))}
       </div>
     </section>

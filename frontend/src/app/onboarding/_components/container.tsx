@@ -1,125 +1,43 @@
-'use client';
-
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-
-import { StepBorrow } from './step-borrow';
-import { StepCollateral } from './step-collateral';
-import { StepPolicy } from './step-policy';
-import { StepReserve } from './step-reserve';
-
-import { OnboardingStepper } from '@/components/ui/OnboardingStepper';
+import { Card } from '@/components/ui/Card';
+import { DUSD_SYMBOL } from '@/constants/contracts';
 import { ONBOARDING_STEPS } from '@/constants/onboarding';
-import { DEFAULT_GUARD_TRIGGER_BPS } from '@/constants/protocol';
-import { ROUTES } from '@/constants/routes';
-import { MOCK_POSITIONS } from '@/services/mockData';
-import { useDefralStore } from '@/stores/useDefralStore';
-import { computeHealthRatioBps, maxOutstandingForRatioBps } from '@/utils/health';
+import { loadVaultSnapshot } from '@/services/chain/vaultSnapshot';
+import { formatBpsAsPercent, formatMoney } from '@/utils/decimals';
 
-const COLLATERAL_SYMBOLS = Object.keys(MOCK_POSITIONS);
-const LAST_STEP_INDEX = ONBOARDING_STEPS.length - 1;
+export default async function Container() {
+  const snapshot = await loadVaultSnapshot();
 
-export default function Container() {
-  const router = useRouter();
-  const [stepIndex, setStepIndex] = useState(0);
-  const [symbol, setSymbol] = useState(COLLATERAL_SYMBOLS[0]);
-  const [debt, setDebt] = useState(0);
-  const [reserve, setReserve] = useState(0);
-  const [triggerRatioBps, setTriggerRatioBps] = useState(DEFAULT_GUARD_TRIGGER_BPS);
-  const [isCouponSweepEnabled, setIsCouponSweepEnabled] = useState(true);
-
-  const template = MOCK_POSITIONS[symbol];
-  const collateralValue = template.collateral.quantity * template.collateral.price;
-  const maxDebt = maxOutstandingForRatioBps(collateralValue, triggerRatioBps);
-  const policy = {
-    triggerRatioBps,
-    targetRatioBps: template.policy.targetRatioBps,
-    maxRepayPerEvent: template.policy.maxRepayPerEvent,
-    isCouponSweepEnabled,
+  const liveValues: Record<string, string> = {
+    'Pick collateral': 'dUST, a tokenised treasury that accrues a quarterly coupon',
+    Borrow: formatMoney(snapshot.position.outstanding, snapshot.tokens.debtDecimals, DUSD_SYMBOL),
+    'Set reserve': formatMoney(snapshot.position.reserve, snapshot.tokens.debtDecimals, DUSD_SYMBOL),
+    'Set guard trigger': formatBpsAsPercent(snapshot.position.triggerBps),
   };
-
-  function confirm() {
-    useDefralStore.setState({
-      status: 'ready',
-      position: {
-        ...template,
-        debt,
-        reserve,
-        policy: {
-          ...policy,
-          isCouponSweepEnabled: template.collateral.paysYield && isCouponSweepEnabled,
-        },
-      },
-    });
-    router.push(ROUTES.dashboard);
-  }
 
   return (
     <div className="flex flex-col gap-8">
-      <h1 className="text-3xl font-semibold tracking-tight">Open a guarded position</h1>
-      <OnboardingStepper steps={ONBOARDING_STEPS} activeIndex={stepIndex} />
+      <header className="flex flex-col gap-3">
+        <h1 className="text-3xl font-semibold tracking-tight">How this position was opened</h1>
+        <p className="max-w-prose text-ink-muted">
+          Four steps, each one a transaction the borrower signs from their own wallet. The values
+          below are what the demo borrower actually chose, read back from the vault.
+        </p>
+      </header>
 
-      {stepIndex === 0 ? (
-        <StepCollateral
-          symbols={COLLATERAL_SYMBOLS}
-          activeSymbol={symbol}
-          onSelect={setSymbol}
-        />
-      ) : null}
+      <ol className="flex flex-col gap-4">
+        {ONBOARDING_STEPS.map((step, index) => (
+          <li key={step}>
+            <Card title={`${index + 1}. ${step}`}>
+              <p className="font-mono text-sm tabular-nums">{liveValues[step]}</p>
+            </Card>
+          </li>
+        ))}
+      </ol>
 
-      {stepIndex === 1 ? (
-        <StepBorrow
-          debt={debt}
-          maxDebt={maxDebt}
-          ratioBps={computeHealthRatioBps(
-            template.collateral.quantity,
-            template.collateral.price,
-            debt,
-          )}
-          triggerRatioBps={triggerRatioBps}
-          onChange={setDebt}
-        />
-      ) : null}
-
-      {stepIndex === 2 ? <StepReserve reserve={reserve} onChange={setReserve} /> : null}
-
-      {stepIndex === LAST_STEP_INDEX ? (
-        <StepPolicy
-          collateral={template.collateral}
-          policy={policy}
-          onTriggerChange={setTriggerRatioBps}
-          onSweepChange={setIsCouponSweepEnabled}
-          onRestart={() => setStepIndex(0)}
-        />
-      ) : null}
-
-      <div className="flex flex-wrap gap-3">
-        <button
-          type="button"
-          disabled={stepIndex === 0}
-          onClick={() => setStepIndex((current) => current - 1)}
-          className="rounded-md border-2 border-line-soft bg-surface px-4 py-2 text-sm font-medium disabled:opacity-40"
-        >
-          Back
-        </button>
-        {stepIndex === LAST_STEP_INDEX ? (
-          <button
-            type="button"
-            onClick={confirm}
-            className="rounded-md border-2 border-line bg-ink px-5 py-2 text-sm font-medium text-paper"
-          >
-            Confirm and open the dashboard
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setStepIndex((current) => current + 1)}
-            className="rounded-md border-2 border-line bg-ink px-5 py-2 text-sm font-medium text-paper"
-          >
-            Next
-          </button>
-        )}
-      </div>
+      <p className="max-w-prose text-sm text-ink-muted">
+        Once the trigger is set, the borrower is done. Everything after this point is the agent
+        watching, and the contract deciding.
+      </p>
     </div>
   );
 }

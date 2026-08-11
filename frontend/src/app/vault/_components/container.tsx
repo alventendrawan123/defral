@@ -1,68 +1,45 @@
-'use client';
+import { PolicyView } from './policy-view';
 
-import { CollateralSwitch } from './collateral-switch';
-import { PolicyControls } from './policy-controls';
-import { ReserveForm } from './reserve-form';
-
+import { AddressPill } from '@/components/ui/AddressPill';
+import { AuthorityBadge } from '@/components/ui/AuthorityBadge';
 import { Card } from '@/components/ui/Card';
-import { ERROR_STATE_COPY, VAULT_COPY } from '@/constants/copy';
-import { useDefralDashboard } from '@/hooks/useDefralDashboard';
-import { MOCK_POSITIONS } from '@/services/mockData';
-import { useDefralStore } from '@/stores/useDefralStore';
+import { DUSD_SYMBOL } from '@/constants/contracts';
+import { RESERVE_EXPLAINER, SNAPSHOT_NOTICE, VAULT_COPY } from '@/constants/copy';
+import { loadVaultSnapshot } from '@/services/chain/vaultSnapshot';
+import { formatMoney } from '@/utils/decimals';
 
-const COLLATERAL_SYMBOLS = Object.keys(MOCK_POSITIONS);
-
-export default function Container() {
-  const { status, position, reload } = useDefralDashboard();
-  const selectCollateral = useDefralStore((state) => state.selectCollateral);
-  const setGuardTrigger = useDefralStore((state) => state.setGuardTrigger);
-  const setCouponSweep = useDefralStore((state) => state.setCouponSweep);
-  const setReserve = useDefralStore((state) => state.setReserve);
-  const revokeAgent = useDefralStore((state) => state.revokeAgent);
-
-  if (status === 'idle' || status === 'loading') {
-    return <div aria-busy="true" className="h-64 animate-pulse rounded-lg bg-surface-sunken" />;
-  }
-
-  if (!position) {
-    return (
-      <div role="alert" className="flex flex-col items-start gap-3">
-        <p className="text-sm text-ink-muted">{ERROR_STATE_COPY.body}</p>
-        <button
-          type="button"
-          onClick={reload}
-          className="rounded-md border-2 border-line bg-surface px-4 py-2 text-sm font-medium"
-        >
-          {ERROR_STATE_COPY.retryLabel}
-        </button>
-      </div>
-    );
-  }
+export default async function Container() {
+  const snapshot = await loadVaultSnapshot();
 
   return (
     <div className="flex flex-col gap-8">
-      <h1 className="text-3xl font-semibold tracking-tight">Reserve and policy</h1>
+      <header className="flex flex-col gap-3">
+        <h1 className="text-3xl font-semibold tracking-tight">{VAULT_COPY.title}</h1>
+        <p className="max-w-prose text-ink-muted">{VAULT_COPY.body}</p>
+      </header>
 
-      <CollateralSwitch
-        symbols={COLLATERAL_SYMBOLS}
-        activeSymbol={position.collateral.symbol}
-        onSelect={selectCollateral}
-      />
+      {snapshot.source === 'committed-snapshot' ? (
+        <p className="rounded-md border border-line-soft bg-surface-sunken px-4 py-2 text-sm text-ink-muted">
+          {SNAPSHOT_NOTICE} Block {snapshot.blockNumber?.toString()}.
+        </p>
+      ) : null}
 
-      <Card title={VAULT_COPY.title} description={VAULT_COPY.body}>
-        <ReserveForm reserve={position.reserve} onApprove={setReserve} />
+      <Card title="Reserve">
+        <p className="text-2xl font-semibold tabular-nums">
+          {formatMoney(snapshot.position.reserve, snapshot.tokens.debtDecimals, DUSD_SYMBOL)}
+        </p>
+        <p className="mt-2 max-w-prose text-sm text-ink-muted">{RESERVE_EXPLAINER}</p>
       </Card>
 
-      <Card title="Defence policy">
-        <PolicyControls
-          collateral={position.collateral}
-          policy={position.policy}
-          isAgentRevoked={position.isAgentRevoked}
-          onTriggerChange={setGuardTrigger}
-          onSweepChange={setCouponSweep}
-          onRevoke={revokeAgent}
-        />
+      <Card title="Defence policy" description="Read live from the vault. This page never writes.">
+        <PolicyView snapshot={snapshot} />
       </Card>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <AddressPill address={snapshot.position.borrower} label="Borrower" />
+        <AddressPill address={snapshot.vault} label="Vault" />
+        <AuthorityBadge isRevoked={snapshot.position.isAgentRevoked} />
+      </div>
     </div>
   );
 }
