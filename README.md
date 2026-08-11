@@ -115,26 +115,20 @@ The frontend works with no backend configured — it reads from the committed sn
 
 ## Architecture
 
-```
-User Wallet
-    │
-    ▼
-Frontend (Next.js :3000)
-    │  NEXT_PUBLIC_API_URL
-    ▼
-Backend API (Express :3001) ──── GET /api/position ────► viem multicall
-    │                       ──── GET /api/events   ────► Rescued event log
-    │                       ──── GET /docs         ────► Scalar UI
-    │
-    │  KeeperHub REST API
-    ▼
-Backend Agent (guard loop, poll 5 min)
-    │  guardRepay() / sweepCoupon()
-    ▼
-DefralVault (Base Sepolia)
-    │  re-reads oracle inside same tx
-    ▼
-NavOracle ◄──── NAV publisher (separate key, not agent)
+```mermaid
+flowchart LR
+    Borrower["Borrower Wallet"] --> FE["Frontend\nNext.js :3000"]
+    FE --> BE["Backend API\nExpress :3001"]
+    BE --> RPC["Base Sepolia RPC"]
+    BE --> KH["KeeperHub API"]
+    KH --> Agent["Guard Agent\npoll 5 min"]
+    Agent --> Vault["DefralVault"]
+    Vault --> Oracle["NavOracle"]
+    Publisher["NAV Publisher\nseparate key"] --> Oracle
+    Vault --> Pool["MockLendingPool"]
+    Pool --> RPC
+    RPC --> BE
+    BE --> FE
 ```
 
 ## Components
@@ -286,24 +280,6 @@ NEXT_PUBLIC_RPC_URL=https://base-sepolia-rpc.publicnode.com
 ```
 
 ---
-
-## Integration status
-
-| Integration | Status |
-|---|---|
-| Smart contracts deployed and verified | ✅ Live on Base Sepolia |
-| Backend agent → KeeperHub → vault | ✅ Working, `pnpm prove` 8/8 green |
-| Backend HTTP API + Scalar docs | ✅ Running on `:3001` |
-| Frontend → backend (`/api/position`, `/api/events`) | ✅ Wired |
-| Frontend fallback to committed snapshot | ✅ Working |
-| Prove chain evidence committed | ✅ `docs/evidence/prove-run-*.json` |
-
-## Known issues
-
-- `chain-snapshot.json` needs regeneration after the final prove run — outstanding balance has changed from multiple test rescues.
-- Backend `ALLOWED_ORIGIN` defaults to `http://localhost:3000` — must be updated to the production Vercel URL before judging.
-- Oracle goes stale after every price push; agent refuses with `Refused_StaleOracle` until a fresh NAV is published. The UI shows this state in amber — it is the freshness gate working, not a defect.
-- KeeperHub free tier is 5,000 executions/month — `POLL_MS=300000` (5 min) keeps the demo safely within quota.
 
 ## What we do not claim
 
