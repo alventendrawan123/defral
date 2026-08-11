@@ -50,3 +50,6 @@ coverage/
 # penjurian 17-20 Agt. Halaman bukti membaca arsip statik, bukan API live.
 !docs/evidence/
 !docs/evidence/**
+
+# AI Code
+.opencode
