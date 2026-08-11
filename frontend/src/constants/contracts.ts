@@ -1,0 +1,16 @@
+import type { EvmAddress } from '@/types';
+
+export const DEMO_VAULT_ADDRESS: EvmAddress = '0x4f634d7173eFf255973E762c3Fe04DF4887FfB35';
+export const REHEARSAL_VAULT_ADDRESS: EvmAddress = '0x8E11A9a4f43271a37f75AFE6e64746A824A06094';
+export const LENDING_POOL_ADDRESS: EvmAddress = '0x35371eD6E29ddE1fDE4DBe8A6048fFb0C860b9eD';
+export const NAV_ORACLE_ADDRESS: EvmAddress = '0x44B94bb593F6De51Ad3385264C0168eEc8E56392';
+export const DUSD_ADDRESS: EvmAddress = '0x9D9734fBb490b603A27f82ec0e23cDfDD9D6b838';
+export const DUST_ADDRESS: EvmAddress = '0x0A72124d5e606aB4264a653B6942738CBAbd2D43';
+
+export const AGENT_EXECUTOR_ADDRESS: EvmAddress = '0x5515844B92dD96C3298Fd7d62Fb87cEE279F18D3';
+export const SYSTEM_DEPLOYER_ADDRESS: EvmAddress = '0xe2d3B7FEA35Ea3B7B8d530cfF58a8227ce62BFAD';
+
+export const DUSD_SYMBOL = 'dUSD';
+export const DUST_SYMBOL = 'dUST';
+
+export const AGENT_FUNCTIONS = ['guardRepay', 'sweepCoupon'] as const;

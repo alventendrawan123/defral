@@ -63,16 +63,88 @@ export interface PricePoint {
   price: number;
 }
 
+export interface VaultPosition {
+  borrower: EvmAddress;
+  outstanding: bigint;
+  collateralAmount: bigint;
+  triggerBps: number;
+  targetBps: number;
+  maxRepayPerEvent: bigint;
+  isCouponSweepEnabled: boolean;
+  reserve: bigint;
+  lastActedRound: bigint;
+  isAgentRevoked: boolean;
+}
+
+export interface OraclePoint {
+  roundId: bigint;
+  price: bigint;
+  decimals: number;
+  updatedAtSeconds: number;
+  ageSeconds: number;
+}
+
+export type SnapshotSource = 'chain' | 'committed-snapshot';
+
+export interface TokenDecimals {
+  debtDecimals: number;
+  collateralDecimals: number;
+}
+
+export interface VaultSnapshot {
+  vault: EvmAddress;
+  position: VaultPosition;
+  guardRepayQuote: bigint;
+  couponDue: bigint;
+  healthRatioBps: number;
+  liquidationBps: number;
+  maxStaleSeconds: number;
+  oracle: OraclePoint;
+  tokens: TokenDecimals;
+  observedAtSeconds: number;
+  blockNumber?: bigint;
+  source: SnapshotSource;
+}
+
+export type AgentPosture = 'idle-healthy' | 'would-defend' | 'oracle-stale' | 'revoked';
+
 export type CapabilityEvidence =
-  | { kind: 'transaction'; transactionLink: string; receiptStatus: ReceiptStatus }
-  | { kind: 'absent-from-abi'; statement: string }
-  | { kind: 'pending'; expectedProof: string };
+  | {
+      kind: 'transaction';
+      transactionLink: string;
+      receiptStatus: ReceiptStatus;
+      onRehearsalVault: boolean;
+    }
+  | { kind: 'execution-record'; executionId: string; contractError: string }
+  | { kind: 'absent-from-abi'; statement: string };
 
 export interface CapabilityRow {
   id: string;
   question: string;
   answer: 'yes' | 'never';
   evidence: CapabilityEvidence;
+}
+
+export type ProofEntryKind = 'transaction' | 'execution-record';
+
+export interface ProofEntry {
+  id: string;
+  rank: number;
+  title: string;
+  claim: string;
+  caller: EvmAddress;
+  callerRole: string;
+  target: EvmAddress;
+  targetLabel: string;
+  kind: ProofEntryKind;
+  contractError: string | null;
+  executionId: string | null;
+  transactionLink: string | null;
+  receiptStatus: ReceiptStatus;
+  blockNumber: number | null;
+  gasUsed: number | null;
+  isSponsored: boolean;
+  reading: string;
 }
 
 export type PositionOutcome = 'rescued' | 'liquidated';

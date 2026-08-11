@@ -1,0 +1,660 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "borrower_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "agentExecutor_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "dUSD_",
+        "type": "address",
+        "internalType": "contract IERC20"
+      },
+      {
+        "name": "collateralToken_",
+        "type": "address",
+        "internalType": "contract IERC20"
+      },
+      {
+        "name": "oracle_",
+        "type": "address",
+        "internalType": "contract AggregatorV3Interface"
+      },
+      {
+        "name": "pool_",
+        "type": "address",
+        "internalType": "contract IDefralPool"
+      },
+      {
+        "name": "triggerBps_",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "targetBps_",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "maxRepayPerEvent_",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "couponSweep_",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "MAX_STALE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_TRIGGER_BPS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_TRIGGER_BPS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "agentExecutor",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "amountToReachTarget",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "borrower",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "collateralToken",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IERC20"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "couponDue",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "dUSD",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IERC20"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getPosition",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct IDefralVault.Position",
+        "components": [
+          {
+            "name": "borrower",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "outstanding",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "collateralAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "triggerBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "targetBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "maxRepayPerEvent",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "couponSweep",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "reserve",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "lastActedRound",
+            "type": "uint80",
+            "internalType": "uint80"
+          },
+          {
+            "name": "revoked",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "guardRepay",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "healthRatioBps",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "lastActedRound",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint80",
+        "internalType": "uint80"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "oracle",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract AggregatorV3Interface"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "policy",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "triggerBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "targetBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "maxRepayPerEvent",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "couponSweep",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pool",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IDefralPool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "quoteGuardRepay",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "reserve",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "revokeAgent",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "revoked",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "setPolicy",
+    "inputs": [
+      {
+        "name": "triggerBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "targetBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "maxRepayPerEvent",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "couponSweep",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "sweepCoupon",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "AgentRevoked",
+    "inputs": [],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PolicySet",
+    "inputs": [
+      {
+        "name": "triggerBps",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
+      },
+      {
+        "name": "targetBps",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
+      },
+      {
+        "name": "maxRepayPerEvent",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "couponSweep",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Rescued",
+    "inputs": [
+      {
+        "name": "borrower",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "kind",
+        "type": "uint8",
+        "indexed": true,
+        "internalType": "uint8"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "healthBefore",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
+      },
+      {
+        "name": "healthAfter",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
+      },
+      {
+        "name": "price",
+        "type": "int256",
+        "indexed": false,
+        "internalType": "int256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint80",
+        "indexed": false,
+        "internalType": "uint80"
+      },
+      {
+        "name": "at",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "InvalidMaxRepayPerEvent",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidTargetBps",
+    "inputs": [
+      {
+        "name": "targetBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "triggerBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidTriggerBps",
+    "inputs": [
+      {
+        "name": "triggerBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "min",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "max",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "NonPositivePrice",
+    "inputs": [
+      {
+        "name": "price",
+        "type": "int256",
+        "internalType": "int256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "NotAgent",
+    "inputs": [
+      {
+        "name": "caller",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "NotBorrower",
+    "inputs": [
+      {
+        "name": "caller",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "Refused_AgentRevoked",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "Refused_AlreadyActed",
+    "inputs": [
+      {
+        "name": "roundId",
+        "type": "uint80",
+        "internalType": "uint80"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "Refused_CouponSweepOff",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "Refused_Healthy",
+    "inputs": [
+      {
+        "name": "healthBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "triggerBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "Refused_NoCouponDue",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "Refused_NoReserve",
+    "inputs": [
+      {
+        "name": "available",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "Refused_NothingToRepay",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "Refused_StaleOracle",
+    "inputs": [
+      {
+        "name": "updatedAt",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxStale",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "SafeERC20FailedOperation",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  }
+]
