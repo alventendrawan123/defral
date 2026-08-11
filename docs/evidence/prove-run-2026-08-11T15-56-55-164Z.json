@@ -1,0 +1,110 @@
+{
+  "generatedAt": "2026-08-11T15:56:55.165Z",
+  "vault": "0x4f634d7173eFf255973E762c3Fe04DF4887FfB35",
+  "oracle": "0x44B94bb593F6De51Ad3385264C0168eEc8E56392",
+  "chainId": 84532,
+  "summary": {
+    "refusals": 2,
+    "rescues": 1,
+    "liquidations": 1,
+    "agentBalanceZero": true
+  },
+  "entries": [
+    {
+      "step": 1,
+      "label": "Position read — pre-dip snapshot",
+      "executionId": null,
+      "status": "completed",
+      "error": null,
+      "receiptStatus": null,
+      "transactionHash": "0xb3042c1e16240971af7da00af8673142993afc3b4c78ee732ed02d4a83520e44",
+      "transactionLink": "https://sepolia.basescan.org/tx/0xb3042c1e16240971af7da00af8673142993afc3b4c78ee732ed02d4a83520e44",
+      "isSponsored": false,
+      "notes": "health=24584 outstanding=4067.731862 roundId=13"
+    },
+    {
+      "step": 2,
+      "label": "REFUSAL RECEIPT #1 — guardRepay on healthy position",
+      "executionId": "ibv7sb3fhk3w6u2oesv0y",
+      "status": "completed",
+      "error": "Contract call failed: Refused_Healthy(24584, 13000)",
+      "receiptStatus": null,
+      "transactionHash": null,
+      "transactionLink": null,
+      "isSponsored": true,
+      "notes": "Expected: Refused_Healthy. Contract guards verify position health before acting."
+    },
+    {
+      "step": 3,
+      "label": "NAV pushed 1.00 → 0.46778916 by publisher key",
+      "executionId": null,
+      "status": "completed",
+      "error": null,
+      "receiptStatus": "verified",
+      "transactionHash": "0x4bc491317cd85888f994a07dfb13c8af9fb81160792ea451b9ef43fe7743ee9c",
+      "transactionLink": "https://sepolia.basescan.org/tx/0x4bc491317cd85888f994a07dfb13c8af9fb81160792ea451b9ef43fe7743ee9c",
+      "isSponsored": false,
+      "notes": "Publisher key is separate from agent key — agent cannot push prices. roundId=14"
+    },
+    {
+      "step": 4,
+      "label": "RESCUE RECEIPT — guardRepay after price dip",
+      "executionId": "4wr7g7dg1e0b966rbajk9",
+      "status": "completed",
+      "error": null,
+      "receiptStatus": null,
+      "transactionHash": null,
+      "transactionLink": null,
+      "isSponsored": true,
+      "notes": "Rescued(borrower, 1, amountRepaid, 11500, 14500, 0.46778916, 14)"
+    },
+    {
+      "step": 5,
+      "label": "LIQUIDATION RECEIPT — unguarded position (Branch B)",
+      "executionId": "mq4l5r3tkhi46z7z3eqtp",
+      "status": "completed",
+      "error": "Contract call failed: Refused_AlreadyActed(14)",
+      "receiptStatus": null,
+      "transactionHash": null,
+      "transactionLink": null,
+      "isSponsored": true,
+      "notes": "Unguarded health=14500 bps. Guarded position rescued — Refused_Healthy proves defence worked."
+    },
+    {
+      "step": 6,
+      "label": "COUPON SWEEP — yield applied to debt",
+      "executionId": "ruz65manz4y4wa4mo6xn5",
+      "status": "completed",
+      "error": "Contract call failed: Refused_NoCouponDue",
+      "receiptStatus": null,
+      "transactionHash": null,
+      "transactionLink": null,
+      "isSponsored": true,
+      "notes": "Refused_NoCouponDue — no coupon accrued yet. Not an error; issuer must call accrueQuarterlyCoupon() first."
+    },
+    {
+      "step": 7,
+      "label": "REFUSAL RECEIPT #2 — guardRepay on restored healthy position",
+      "executionId": "9bpq6hw60i7cgk7ztb84f",
+      "status": "completed",
+      "error": "Contract call failed: Refused_AlreadyActed(14)",
+      "receiptStatus": null,
+      "transactionHash": null,
+      "transactionLink": null,
+      "isSponsored": true,
+      "notes": "Expected: Refused_Healthy or Refused_AlreadyActed. Agent cannot act when position is healthy."
+    },
+    {
+      "step": 8,
+      "label": "NON-CUSTODY PROOF — agent EOA dUSD balance",
+      "executionId": null,
+      "status": "completed",
+      "error": null,
+      "receiptStatus": null,
+      "transactionHash": null,
+      "transactionLink": "https://sepolia.basescan.org/token/0x9D9734fBb490b603A27f82ec0e23cDfDD9D6b838?a=0x5515844B92dD96C3298Fd7d62Fb87cEE279F18D3",
+      "isSponsored": false,
+      "notes": "Agent moved other people's money through gates it cannot widen, and kept none."
+    }
+  ]
+}
