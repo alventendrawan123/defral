@@ -1,7 +1,7 @@
 import { STATUS_LABEL } from '@/constants/copy';
 import { VISUAL_CAP_BPS } from '@/constants/protocol';
 import type { HealthStatus } from '@/types';
-import { formatBps, formatRatioBps } from '@/utils/format';
+import { formatBpsAsPercent, formatBpsRaw } from '@/utils/decimals';
 
 const STATUS_STROKE: Record<HealthStatus, string> = {
   safe: 'var(--color-safe)',
@@ -50,7 +50,7 @@ export function HealthRing({
         height={size}
         viewBox={`0 0 ${size} ${size}`}
         role="img"
-        aria-label={`Health ratio ${formatRatioBps(healthRatioBps)}, status ${STATUS_LABEL[status]}`}
+        aria-label={`Health ratio ${formatBpsAsPercent(healthRatioBps)}, status ${STATUS_LABEL[status]}`}
       >
         <g transform={`rotate(-90 ${center} ${center})`}>
           <circle
@@ -88,7 +88,7 @@ export function HealthRing({
           className="fill-ink text-4xl tabular-nums"
           style={{ fontSize: size * 0.16, fontWeight: 600 }}
         >
-          {formatRatioBps(healthRatioBps)}
+          {formatBpsAsPercent(healthRatioBps)}
         </text>
       </svg>
       <figcaption className="text-center">
@@ -96,7 +96,7 @@ export function HealthRing({
           {STATUS_LABEL[status]}
         </span>
         <span className="block text-xs tabular-nums text-ink-muted">
-          Guard Trigger {formatBps(triggerRatioBps)}
+          Guard Trigger {formatBpsRaw(triggerRatioBps)}
         </span>
       </figcaption>
     </figure>

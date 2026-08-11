@@ -1,6 +1,6 @@
 import { EXPLORER_ADDRESS_URL } from '@/constants/chain';
 import type { EvmAddress } from '@/types';
-import { shortenAddress } from '@/utils/format';
+import { shortenAddress } from '@/utils/decimals';
 
 interface AddressPillProps {
   address: EvmAddress;
