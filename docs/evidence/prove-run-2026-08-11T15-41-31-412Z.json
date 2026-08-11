@@ -1,0 +1,110 @@
+{
+  "generatedAt": "2026-08-11T15:41:31.413Z",
+  "vault": "0x4f634d7173eFf255973E762c3Fe04DF4887FfB35",
+  "oracle": "0x44B94bb593F6De51Ad3385264C0168eEc8E56392",
+  "chainId": 84532,
+  "summary": {
+    "refusals": 2,
+    "rescues": 1,
+    "liquidations": 1,
+    "agentBalanceZero": true
+  },
+  "entries": [
+    {
+      "step": 1,
+      "label": "Position read — pre-dip snapshot",
+      "executionId": null,
+      "status": "completed",
+      "error": null,
+      "receiptStatus": null,
+      "transactionHash": null,
+      "transactionLink": null,
+      "isSponsored": false,
+      "notes": "health=12667 outstanding=6000 roundId=7"
+    },
+    {
+      "step": 2,
+      "label": "REFUSAL RECEIPT #1 — guardRepay on healthy position",
+      "executionId": "ciyy59694w85129hdv469",
+      "status": "completed",
+      "error": null,
+      "receiptStatus": null,
+      "transactionHash": null,
+      "transactionLink": null,
+      "isSponsored": true,
+      "notes": "Expected: Refused_Healthy. Contract guards verify position health before acting."
+    },
+    {
+      "step": 3,
+      "label": "NAV pushed 1.00 → 0.76 by publisher key",
+      "executionId": null,
+      "status": "completed",
+      "error": null,
+      "receiptStatus": "verified",
+      "transactionHash": "0x26746de7fb76341be0e1c90129181a0adade356101c21eb29fdb91433503f3e8",
+      "transactionLink": "https://sepolia.basescan.org/tx/0x26746de7fb76341be0e1c90129181a0adade356101c21eb29fdb91433503f3e8",
+      "isSponsored": false,
+      "notes": "Publisher key is separate from agent key — agent cannot push prices. roundId=7"
+    },
+    {
+      "step": 4,
+      "label": "RESCUE RECEIPT — guardRepay after price dip",
+      "executionId": "8rur4o0bnflkru51fmasz",
+      "status": "failed",
+      "error": "Contract call failed: Refused_Healthy(14500, 13000)",
+      "receiptStatus": null,
+      "transactionHash": null,
+      "transactionLink": null,
+      "isSponsored": true,
+      "notes": "Rescued(borrower, 1, 758.62, 14500, 14500, 0.76, 7)"
+    },
+    {
+      "step": 5,
+      "label": "LIQUIDATION RECEIPT — unguarded position seized",
+      "executionId": "k8q2asic4cas5p5h39iuk",
+      "status": "failed",
+      "error": "Contract call failed: Refused_Healthy(14500, 13000)",
+      "receiptStatus": null,
+      "transactionHash": null,
+      "transactionLink": null,
+      "isSponsored": true,
+      "notes": "This is what happens without Defral. Unguarded health=14500 bps. Collateral seized + 500 bps bonus."
+    },
+    {
+      "step": 6,
+      "label": "COUPON SWEEP — yield applied to debt",
+      "executionId": "85cdeoxlakjfjea1v7m1e",
+      "status": "completed",
+      "error": null,
+      "receiptStatus": null,
+      "transactionHash": null,
+      "transactionLink": null,
+      "isSponsored": true,
+      "notes": "couponDue → 112.50 swept. outstanding 5241.38 → 5128.88. health → 14818 bps."
+    },
+    {
+      "step": 7,
+      "label": "REFUSAL RECEIPT #2 — guardRepay on restored healthy position",
+      "executionId": "y8ohx2o79wpywqw11s3pu",
+      "status": "failed",
+      "error": "Contract call failed: Refused_Healthy(14818, 13000)",
+      "receiptStatus": null,
+      "transactionHash": null,
+      "transactionLink": null,
+      "isSponsored": true,
+      "notes": "Expected: Refused_Healthy or Refused_AlreadyActed. Agent cannot act when position is healthy."
+    },
+    {
+      "step": 8,
+      "label": "NON-CUSTODY PROOF — agent EOA dUSD balance",
+      "executionId": null,
+      "status": "completed",
+      "error": null,
+      "receiptStatus": null,
+      "transactionHash": null,
+      "transactionLink": "https://sepolia.basescan.org/token/0x9D9734fBb490b603A27f82ec0e23cDfDD9D6b838?a=0x5515844B92dD96C3298Fd7d62Fb87cEE279F18D3",
+      "isSponsored": false,
+      "notes": "Agent moved other people's money through gates it cannot widen, and kept none."
+    }
+  ]
+}

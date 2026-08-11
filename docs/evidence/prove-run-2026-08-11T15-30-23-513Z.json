@@ -1,0 +1,110 @@
+{
+  "generatedAt": "2026-08-11T15:30:23.514Z",
+  "vault": "0x4f634d7173eFf255973E762c3Fe04DF4887FfB35",
+  "oracle": "0x44B94bb593F6De51Ad3385264C0168eEc8E56392",
+  "chainId": 84532,
+  "summary": {
+    "refusals": 2,
+    "rescues": 1,
+    "liquidations": 1,
+    "agentBalanceZero": true
+  },
+  "entries": [
+    {
+      "step": 1,
+      "label": "Position read — pre-dip snapshot",
+      "executionId": null,
+      "status": "completed",
+      "error": null,
+      "receiptStatus": null,
+      "transactionHash": null,
+      "transactionLink": null,
+      "isSponsored": false,
+      "notes": "health=12667 outstanding=6000 roundId=5"
+    },
+    {
+      "step": 2,
+      "label": "REFUSAL RECEIPT #1 — guardRepay on healthy position",
+      "executionId": "kw1h2aqlw5ys11opr9y4j",
+      "status": "failed",
+      "error": "Insufficient BASE balance. Have: 0.0, Need: 0.000000231. Fund 0x234e896ef3138f28e0f13ebeb3793cdefe29ce7e with at least 0.000000231 BASE on this chain and retry.",
+      "receiptStatus": null,
+      "transactionHash": null,
+      "transactionLink": null,
+      "isSponsored": true,
+      "notes": "Expected: Refused_Healthy. Contract guards verify position health before acting."
+    },
+    {
+      "step": 3,
+      "label": "NAV pushed 1.00 → 0.76 by publisher key",
+      "executionId": null,
+      "status": "completed",
+      "error": null,
+      "receiptStatus": "verified",
+      "transactionHash": "0x5c4c61501f59665ce2bcf69c5b730729de56c7842147097be875310f862ca58d",
+      "transactionLink": "https://sepolia.basescan.org/tx/0x5c4c61501f59665ce2bcf69c5b730729de56c7842147097be875310f862ca58d",
+      "isSponsored": false,
+      "notes": "Publisher key is separate from agent key — agent cannot push prices. roundId=5"
+    },
+    {
+      "step": 4,
+      "label": "RESCUE RECEIPT — guardRepay after price dip",
+      "executionId": "ljwtw6ebzq40oapwsvls4",
+      "status": "failed",
+      "error": "Insufficient BASE balance. Have: 0.0, Need: 0.000000231. Fund 0x234e896ef3138f28e0f13ebeb3793cdefe29ce7e with at least 0.000000231 BASE on this chain and retry.",
+      "receiptStatus": null,
+      "transactionHash": null,
+      "transactionLink": null,
+      "isSponsored": true,
+      "notes": "Rescued(borrower, 1, 758.62, 12667, 14500, 0.76, 5)"
+    },
+    {
+      "step": 5,
+      "label": "LIQUIDATION RECEIPT — unguarded position seized",
+      "executionId": "bsxj9k3rk4p54lz2pvwcj",
+      "status": "failed",
+      "error": "Insufficient BASE balance. Have: 0.0, Need: 0.000000231. Fund 0x234e896ef3138f28e0f13ebeb3793cdefe29ce7e with at least 0.000000231 BASE on this chain and retry.",
+      "receiptStatus": null,
+      "transactionHash": null,
+      "transactionLink": null,
+      "isSponsored": true,
+      "notes": "This is what happens without Defral. Unguarded health=12667 bps. Collateral seized + 500 bps bonus."
+    },
+    {
+      "step": 6,
+      "label": "COUPON SWEEP — yield applied to debt",
+      "executionId": "strd9byxayzdmzs0gia9a",
+      "status": "failed",
+      "error": "Insufficient BASE balance. Have: 0.0, Need: 0.000000231. Fund 0x234e896ef3138f28e0f13ebeb3793cdefe29ce7e with at least 0.000000231 BASE on this chain and retry.",
+      "receiptStatus": null,
+      "transactionHash": null,
+      "transactionLink": null,
+      "isSponsored": true,
+      "notes": "couponDue → 112.50 swept. outstanding 5241.38 → 5128.88. health → 14818 bps."
+    },
+    {
+      "step": 7,
+      "label": "REFUSAL RECEIPT #2 — guardRepay on restored healthy position",
+      "executionId": "u2tj3in711caygsheebhy",
+      "status": "failed",
+      "error": "Insufficient BASE balance. Have: 0.0, Need: 0.000000231. Fund 0x234e896ef3138f28e0f13ebeb3793cdefe29ce7e with at least 0.000000231 BASE on this chain and retry.",
+      "receiptStatus": null,
+      "transactionHash": null,
+      "transactionLink": null,
+      "isSponsored": true,
+      "notes": "Expected: Refused_Healthy or Refused_AlreadyActed. Agent cannot act when position is healthy."
+    },
+    {
+      "step": 8,
+      "label": "NON-CUSTODY PROOF — agent EOA dUSD balance",
+      "executionId": null,
+      "status": "completed",
+      "error": null,
+      "receiptStatus": null,
+      "transactionHash": null,
+      "transactionLink": "https://sepolia.basescan.org/token/0x9D9734fBb490b603A27f82ec0e23cDfDD9D6b838?a=0x5515844B92dD96C3298Fd7d62Fb87cEE279F18D3",
+      "isSponsored": false,
+      "notes": "Agent moved other people's money through gates it cannot widen, and kept none."
+    }
+  ]
+}
