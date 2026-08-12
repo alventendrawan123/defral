@@ -11,15 +11,15 @@ because the boundary is the honest part.
 ## What came from the Canton build
 
 - The health-ratio math and the shape of its derived values.
-- The decision loop: observe a price, recompute the ratio, act only below the trigger.
+- The decision loop: observe a price, check the ratio, act only below the trigger.
 - The product voice and the general UI direction.
 
 ## What was written for this hackathon
 
-- Every Solidity contract in `SC/`, targeting Base Sepolia.
+- Every Solidity contract in `sc/`, deployed and verified on Base Sepolia.
 - The KeeperHub integration and the reliability layer around it.
 - The entire frontend in `frontend/`, rebuilt on Next.js with a new architecture.
-- The Capability Matrix, the proof archive, and the side-by-side liquidation comparison.
+- The Capability Matrix, the proof archive, and the pair of mined transactions where one defence lands and the system deployer is refused.
 - Every negative control: the transactions that are supposed to fail, and do.
 
 ## What did not survive the move, and what replaced it
@@ -44,13 +44,23 @@ Stated plainly, and this section is updated as contracts land.
 
 | Area | Status |
 |---|---|
-| Health math in `frontend/src/utils/health.ts` | Real, pure, and unit tested against the canonical demo numbers |
-| Capability Matrix rows | Real questions, evidence slots marked `awaiting deployment` until the contracts are live |
-| `/proof` archive | Reads committed JSON in `frontend/docs/evidence/`, never a live API. Transaction links are null until broadcast |
-| Liquidation comparison | Both sides modelled, transaction links null until broadcast |
-| Dashboard, vault, onboarding | Driven by fixtures in `frontend/src/services/mockData.ts` |
-| Wallet signing | Not wired. The borrower path uses demo borrowers |
-| Contracts on Base Sepolia | Not deployed at the time of writing |
+| Contracts on Base Sepolia | **Deployed and verified.** Demo vault `0x4f634d7173eFf255973E762c3Fe04DF4887FfB35` |
+| Dashboard, vault, connect, onboarding | **Live chain reads.** One multicall per render, `revalidate = 30` |
+| Health ratio and repay quote | **Read from the contract**, never recomputed here. `healthRatioBps()` and `quoteGuardRepay()` |
+| Token decimals | **Read from the contracts.** dUSD is 6 and dUST is 18, and the UI does not assume it |
+| `/proof` archive | Reads committed JSON in `frontend/docs/evidence/`, derived from the prove runs in `docs/evidence/`. Never a live API |
+| Agent refusals | **Execution records, not transactions.** KeeperHub declines to broadcast a call it predicts will revert, so no hash exists and none is offered |
+| Owner side refusal | **A mined, reverted transaction.** The system deployer called the demo vault and got `NotAgent` |
+| Protection floor and runway | Derived in the frontend, in `bigint`, from chain inputs. These two have no on-chain equivalent |
+| Offline fallback | A snapshot read from the chain and committed, labelled with its block when it is used |
+| Wallet signing | **Not wired.** The frontend never writes to the contracts, and no control implies otherwise |
+| Second collateral (mXAU) | **Cut.** Only dUST is deployed, so only dUST is shown |
 
-Nothing on the site claims a transaction that does not exist. A row without a
-transaction says `awaiting deployment` instead of showing an empty cell.
+Nothing on the site claims a transaction that does not exist. An agent refusal
+shows the decoded custom error the contract returned with its `executionId`,
+and says plainly that no transaction was broadcast.
+
+Two disclosures we make before anyone asks. Some evidence ran on an identical
+rehearsal vault, and every entry is labelled with which vault it used. And the
+demo position has since been defended for real, so its debt is permanently
+lower than the opening figure and its reserve has been spent down.
