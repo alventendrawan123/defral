@@ -97,7 +97,29 @@ Semua 5 entry sekarang pointing ke rehearsal vault. Tambahkan entry dari demo va
 
 ---
 
-### FIX-CORS 🔴 Backend CORS untuk production URL
+### FIX-CORS ⚪ TIDAK PERLU (ditutup 2026-08-12)
+
+**Temuan:** CORS tidak berlaku di sini. Semua fetch ke backend terjadi di
+**async Server Component** (`app/*/_components/container.tsx`), jadi jalan di
+Node, bukan di browser. Client component cuma `error.tsx`, `global-error.tsx`,
+`NavBar.tsx`, dan nol dari ketiganya fetch. Browser tidak pernah memanggil
+`:3001`, jadi tidak ada preflight dan tidak ada origin check.
+
+**Instruksi lama di bawah juga salah sasaran:** `backend/.env` tidak ada.
+Backend pakai `dotenv/config` yang membaca `.env`, sementara yang ada cuma
+`.env.local` dan `.env.example`. Jadi menaruh `ALLOWED_ORIGIN` di `.env.local`
+diam-diam tidak berefek, dan backend sekarang jalan pakai default
+`http://localhost:3000` (`backend/src/index.ts:49`).
+
+**Risiko deploy yang sebenarnya, dan ini belum ditangani:** kalau frontend
+di-deploy ke Vercel sementara backend masih di `localhost:3001`, server Vercel
+tidak bisa menjangkau localhost. `NEXT_PUBLIC_API_URL` akan gagal, lalu jatuh
+ke RPC langsung, lalu ke committed snapshot. Diam, tidak error. Backend harus
+punya URL publik dulu sebelum `NEXT_PUBLIC_API_URL` diisi di production.
+
+<details><summary>Instruksi lama (jangan diikuti)</summary>
+
+#### Backend CORS untuk production URL
 
 **File:** `backend/.env`
 
@@ -114,6 +136,8 @@ ALLOWED_ORIGIN=*
 ```
 
 **Acceptance:** dashboard shows `source: 'chain'` saat dibuka dari production URL.
+
+</details>
 
 ---
 
@@ -137,12 +161,12 @@ ALLOWED_ORIGIN=*
 
 - [x] blockNumber undefined guard fixed
 - [x] `NEXT_PUBLIC_RPC_URL` added to `.env`
-- [ ] `chain-snapshot.json` has `lastActedRound > 0`
-- [ ] `proof-archive.json` has entry with `targetLabel: "demo vault"`
-- [ ] Backend `ALLOWED_ORIGIN` set for production
-- [ ] `pnpm test` 53/53 green
-- [ ] `pnpm type-check` zero errors
-- [ ] `pnpm build` succeeds
+- [x] `chain-snapshot.json` has `lastActedRound > 0`
+- [x] `proof-archive.json` has entry with `targetLabel: "demo vault"`
+- [x] ~~Backend `ALLOWED_ORIGIN`~~ tidak perlu, lihat FIX-CORS
+- [x] `pnpm test` 60/60 green
+- [x] `pnpm type-check` zero errors
+- [ ] `pnpm build` succeeds (belum dijalankan lokal, CI yang verifikasi)
 
 ---
 
