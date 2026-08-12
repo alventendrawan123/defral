@@ -1,9 +1,13 @@
 import { BPS_SCALE } from '@/constants/protocol';
 import type { HealthStatus, VaultSnapshot } from '@/types';
 
-export function resolveHealthStatus(ratioBps: number, triggerBps: number): HealthStatus {
+export function resolveHealthStatus(
+  ratioBps: number,
+  triggerBps: number,
+  liquidationBps: number,
+): HealthStatus {
   if (ratioBps >= triggerBps) return 'safe';
-  return ratioBps >= 11_000 ? 'defending' : 'critical';
+  return ratioBps >= liquidationBps ? 'defending' : 'critical';
 }
 
 export function computeProtectionFloorPrice(snapshot: VaultSnapshot): bigint {

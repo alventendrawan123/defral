@@ -90,16 +90,16 @@ describe('computeProtectionRunwayBps', () => {
 
 describe('resolveHealthStatus', () => {
   it('is safe at or above the trigger', () => {
-    expect(resolveHealthStatus(16_667, 13_000)).toBe('safe');
-    expect(resolveHealthStatus(13_000, 13_000)).toBe('safe');
+    expect(resolveHealthStatus(16_667, 13_000, 11_000)).toBe('safe');
+    expect(resolveHealthStatus(13_000, 13_000, 11_000)).toBe('safe');
   });
 
   it('is defending inside the defence window', () => {
-    expect(resolveHealthStatus(12_667, 13_000)).toBe('defending');
-    expect(resolveHealthStatus(11_000, 13_000)).toBe('defending');
+    expect(resolveHealthStatus(12_667, 13_000, 11_000)).toBe('defending');
+    expect(resolveHealthStatus(11_000, 13_000, 11_000)).toBe('defending');
   });
 
   it('is critical once liquidation is permissionless', () => {
-    expect(resolveHealthStatus(10_999, 13_000)).toBe('critical');
+    expect(resolveHealthStatus(10_999, 13_000, 11_000)).toBe('critical');
   });
 });

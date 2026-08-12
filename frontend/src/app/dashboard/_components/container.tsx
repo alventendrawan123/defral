@@ -11,7 +11,11 @@ import { resolveHealthStatus } from '@/utils/health';
 export default async function Container() {
   const snapshot = await loadVaultSnapshot();
   const posture = resolveAgentPosture(snapshot);
-  const status = resolveHealthStatus(snapshot.healthRatioBps, snapshot.position.triggerBps);
+  const status = resolveHealthStatus(
+    snapshot.healthRatioBps,
+    snapshot.position.triggerBps,
+    snapshot.liquidationBps,
+  );
 
   return (
     <div className="flex flex-col gap-10">
