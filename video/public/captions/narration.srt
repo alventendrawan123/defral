@@ -1,0 +1,187 @@
+1
+00:00:00,000 --> 00:00:05,000
+Defral. A loan that defends itself.
+
+2
+00:00:05,000 --> 00:00:07,500
+Rina borrowed $6,000
+
+3
+00:00:07,500 --> 00:00:10,000
+against $10,000 of tokenized Treasury.
+
+4
+00:00:10,000 --> 00:00:13,500
+When price dips, there's a 2,000 bps window
+
+5
+00:00:13,500 --> 00:00:17,000
+between the guard trigger and liquidation.
+
+6
+00:00:17,000 --> 00:00:21,000
+That window is the only job of the reserve.
+
+7
+00:00:21,000 --> 00:00:25,000
+She was asleep.
+
+8
+00:00:25,000 --> 00:00:30,000
+This is the live position on Base Sepolia.
+
+9
+00:00:30,000 --> 00:00:35,000
+The agent is armed and watching.
+
+10
+00:00:35,000 --> 00:00:40,000
+Every number here was read from the vault contract.
+
+11
+00:00:40,000 --> 00:00:45,000
+Not recomputed. Not estimated.
+
+12
+00:00:45,000 --> 00:00:50,000
+The reserve stays in your wallet.
+
+13
+00:00:50,000 --> 00:00:55,000
+Setting it is an approve, not a transfer.
+
+14
+00:00:55,000 --> 00:00:58,500
+Two zero-argument calls.
+
+15
+00:00:58,500 --> 00:01:02,000
+The contract knows what to do.
+
+16
+00:01:02,000 --> 00:01:05,000
+No parameters, no destinations.
+
+17
+00:01:05,000 --> 00:01:08,500
+Trigger at 130%.
+
+18
+00:01:08,500 --> 00:01:11,500
+Target at 145%.
+
+19
+00:01:11,500 --> 00:01:15,000
+Max repay: 2,000 dUSD per event.
+
+20
+00:01:15,000 --> 00:01:20,000
+The publisher key is separate from the agent key.
+
+21
+00:01:20,000 --> 00:01:25,000
+The agent cannot push prices — only respond to them.
+
+22
+00:01:25,000 --> 00:01:30,000
+Price dropped to fifty-nine cents.
+
+23
+00:01:30,000 --> 00:01:35,000
+Health ratio: 11,500 basis points.
+
+24
+00:01:35,000 --> 00:01:40,000
+The defence window is open.
+
+25
+00:01:40,000 --> 00:01:47,000
+The agent fired automatically.
+
+26
+00:01:47,000 --> 00:01:55,000
+Open the Logs tab — that's where the proof lives.
+
+27
+00:01:55,000 --> 00:01:59,000
+From is the KeeperHub relayer.
+
+28
+00:01:59,000 --> 00:02:03,000
+The action ran as an internal call.
+
+29
+00:02:03,000 --> 00:02:07,000
+Health: 11,500 to 14,500.
+
+30
+00:02:07,000 --> 00:02:10,000
+Landed exactly on target.
+
+31
+00:02:10,000 --> 00:02:14,000
+The proof page reads a JSON archive
+
+32
+00:02:14,000 --> 00:02:20,000
+committed to this repository.
+
+33
+00:02:20,000 --> 00:02:26,000
+The deployer of this entire system —
+
+34
+00:02:26,000 --> 00:02:31,000
+the address that owns the pool
+
+35
+00:02:31,000 --> 00:02:35,000
+and holds every admin key — was refused.
+
+36
+00:02:35,000 --> 00:02:40,000
+NotAgent. That's on the demo vault itself.
+
+37
+00:02:40,000 --> 00:02:45,000
+Permanent. You can click it.
+
+38
+00:02:45,000 --> 00:02:48,000
+KeeperHub declines to broadcast
+
+39
+00:02:48,000 --> 00:02:51,000
+a call it predicts will revert.
+
+40
+00:02:51,000 --> 00:02:55,000
+This is the execution record.
+
+41
+00:02:55,000 --> 00:03:00,000
+The agent moved other people's money
+
+42
+00:03:00,000 --> 00:03:05,000
+through gates it cannot widen, and kept none.
+
+43
+00:03:05,000 --> 00:03:10,000
+Agent EOA: zero dUSD.
+
+44
+00:03:10,000 --> 00:03:15,000
+No withdraw function. We never held it.
+
+45
+00:03:15,000 --> 00:03:20,000
+Defral.
+
+46
+00:03:20,000 --> 00:03:25,000
+It never becomes a liquidation.
+
+47
+00:03:25,000 --> 00:03:30,000
+github.com/alventendrawan123/defral
