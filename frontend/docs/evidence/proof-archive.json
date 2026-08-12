@@ -2,9 +2,10 @@
   "sourceFiles": [
     "docs/evidence/p3-refusal-evidence.json",
     "docs/evidence/p0-guard-path-end-to-end.json",
-    "docs/evidence/live-contract-function-sweep.json"
+    "docs/evidence/live-contract-function-sweep.json",
+    "docs/evidence/prove-run-2026-08-11T15-47-41-190Z.json"
   ],
-  "readAt": "2026-08-11",
+  "readAt": "2026-08-12",
   "entries": [
     {
       "id": "not-agent",
@@ -26,8 +27,27 @@
       "reading": "Mined, permanent and publicly checkable. The vault answers to exactly one address, and that address is immutable."
     },
     {
-      "id": "guard-repay-success",
+      "id": "guard-repay-demo",
       "rank": 2,
+      "title": "The live demo vault was defended",
+      "claim": "The demo position fell below its trigger and the agent repaid from the borrower reserve, restoring the ratio to the target.",
+      "caller": "0x5515844B92dD96C3298Fd7d62Fb87cEE279F18D3",
+      "callerRole": "agentExecutor",
+      "target": "0x4f634d7173eFf255973E762c3Fe04DF4887FfB35",
+      "targetLabel": "demo vault",
+      "kind": "execution-record",
+      "contractError": null,
+      "executionId": "azamppidcizzmjqjjpyx2",
+      "transactionLink": null,
+      "receiptStatus": "verified",
+      "blockNumber": null,
+      "gasUsed": null,
+      "isSponsored": true,
+      "reading": "Rescued at NAV 0.58982112 in oracle round 11, taking health from 11500 back to the 14500 target. This is why the demo position now carries less debt than it opened with."
+    },
+    {
+      "id": "guard-repay-success",
+      "rank": 3,
       "title": "A defence that landed, with gas sponsored",
       "claim": "When the position falls below the borrower's own trigger, the agent repays from the borrower's wallet and the ratio lands exactly on target.",
       "caller": "0x5515844B92dD96C3298Fd7d62Fb87cEE279F18D3",
@@ -45,8 +65,27 @@
       "reading": "quoteGuardRepay predicted 758.620690 dUSD before the agent moved, and 758.620690 is exactly what moved. Health went 12667 to 14500, landing on target rather than near it. The reserve fell by the identical amount, because the money came from the borrower's own wallet through the allowance."
     },
     {
+      "id": "refused-healthy-demo",
+      "rank": 4,
+      "title": "The live demo vault refuses the agent when healthy",
+      "claim": "The demo vault re-reads the oracle inside the transaction and refuses while the ratio is above the trigger.",
+      "caller": "0x5515844B92dD96C3298Fd7d62Fb87cEE279F18D3",
+      "callerRole": "agentExecutor",
+      "target": "0x4f634d7173eFf255973E762c3Fe04DF4887FfB35",
+      "targetLabel": "demo vault",
+      "kind": "execution-record",
+      "contractError": "Refused_Healthy(19497, 13000)",
+      "executionId": "18s842dcekxxtkz0tq61d",
+      "transactionLink": null,
+      "receiptStatus": "reverted",
+      "blockNumber": null,
+      "gasUsed": null,
+      "isSponsored": true,
+      "reading": "The contract returned its own error carrying the live health of 19497 against the borrower's own trigger of 13000."
+    },
+    {
       "id": "refused-healthy",
-      "rank": 3,
+      "rank": 5,
       "title": "The agent asks to defend a healthy position",
       "claim": "The contract re-reads the oracle inside the same transaction and refuses while the position is healthy.",
       "caller": "0x5515844B92dD96C3298Fd7d62Fb87cEE279F18D3",
@@ -65,7 +104,7 @@
     },
     {
       "id": "refused-already-acted",
-      "rank": 4,
+      "rank": 6,
       "title": "The agent asks to act twice in the same oracle round",
       "claim": "One defensive action per oracle round, so a stuck or repeated trigger cannot drain the reserve.",
       "caller": "0x5515844B92dD96C3298Fd7d62Fb87cEE279F18D3",
@@ -84,7 +123,7 @@
     },
     {
       "id": "refused-no-coupon",
-      "rank": 5,
+      "rank": 7,
       "title": "The agent asks to sweep a coupon that has not accrued",
       "claim": "Coupon is accrued state, not a formula. With nothing accrued there is nothing to sweep.",
       "caller": "0x5515844B92dD96C3298Fd7d62Fb87cEE279F18D3",
