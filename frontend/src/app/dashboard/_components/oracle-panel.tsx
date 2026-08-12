@@ -5,6 +5,7 @@ import { formatOraclePrice, formatSecondsAsAge } from '@/utils/decimals';
 const POSTURE_CLASS: Record<AgentPosture, string> = {
   'idle-healthy': 'border-safe bg-safe-soft text-safe',
   'would-defend': 'border-defending bg-defending-soft text-defending',
+  'reserve-exhausted': 'border-critical bg-critical-soft text-critical',
   'oracle-stale': 'border-defending bg-defending-soft text-defending',
   revoked: 'border-critical bg-critical-soft text-critical',
 };

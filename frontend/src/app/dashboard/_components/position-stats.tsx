@@ -24,6 +24,7 @@ export function PositionStats({ snapshot }: { snapshot: VaultSnapshot }) {
   const { debtDecimals, collateralDecimals } = tokens;
   const floorPrice = computeProtectionFloorPrice(snapshot);
   const runwayBps = computeProtectionRunwayBps(snapshot.oracle.price, floorPrice);
+  const isBelowTrigger = snapshot.healthRatioBps < position.triggerBps;
 
   return (
     <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -45,7 +46,11 @@ export function PositionStats({ snapshot }: { snapshot: VaultSnapshot }) {
             ? NOTHING_TO_PAY
             : formatMoney(guardRepayQuote, debtDecimals, DUSD_SYMBOL)
         }
-        hint="Read from quoteGuardRepay()"
+        hint={
+          guardRepayQuote === 0n && isBelowTrigger
+            ? 'quoteGuardRepay() returns zero because the reserve is empty, not because the position is healthy'
+            : 'Read from quoteGuardRepay()'
+        }
       />
       <Stat label="Guard Trigger" value={formatBpsAsPercent(position.triggerBps)} />
       <Stat label="Restore target" value={formatBpsAsPercent(position.targetBps)} />

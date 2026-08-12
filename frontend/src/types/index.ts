@@ -106,7 +106,12 @@ export interface VaultSnapshot {
   source: SnapshotSource;
 }
 
-export type AgentPosture = 'idle-healthy' | 'would-defend' | 'oracle-stale' | 'revoked';
+export type AgentPosture =
+  | 'idle-healthy'
+  | 'would-defend'
+  | 'reserve-exhausted'
+  | 'oracle-stale'
+  | 'revoked';
 
 export type CapabilityEvidence =
   | {

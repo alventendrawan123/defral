@@ -83,7 +83,7 @@ export const HERO_COPY = {
 } as const;
 
 export const REHEARSAL_DISCLOSURE =
-  'This defence ran on an identical rehearsal position. Defending the demo position would permanently lower its debt, and a position can only be opened once, so we left it untouched for you to inspect.';
+  'Some of the evidence below ran on an identical rehearsal position, which is labelled on each entry. The demo position has since been defended for real, so its debt is permanently lower than the opening figure and its reserve has been spent down.';
 
 export const REFUSAL_DISCLOSURE =
   'KeeperHub declines to broadcast a call it predicts will revert, so an agent refusal has no transaction hash. What you get instead is the execution record, carrying the decoded custom error the contract itself returned.';
@@ -99,6 +99,10 @@ export const POSTURE_COPY = {
   'would-defend': {
     label: 'Would defend now',
     body: 'The position is inside the defence window. This is what the contract would repay from your reserve.',
+  },
+  'reserve-exhausted': {
+    label: 'Reserve spent',
+    body: 'The position is below your trigger and the reserve is empty, so there is nothing left to repay with. The agent cannot invent funds, and it does not liquidate you either. Top the reserve back up and it resumes.',
   },
   'oracle-stale': {
     label: 'Price is stale',

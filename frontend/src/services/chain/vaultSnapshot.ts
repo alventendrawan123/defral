@@ -107,6 +107,7 @@ export function resolveAgentPosture(snapshot: VaultSnapshot): AgentPosture {
   if (snapshot.position.isAgentRevoked) return 'revoked';
   if (snapshot.oracle.ageSeconds > snapshot.maxStaleSeconds) return 'oracle-stale';
   if (snapshot.guardRepayQuote > 0n) return 'would-defend';
+  if (snapshot.healthRatioBps < snapshot.position.triggerBps) return 'reserve-exhausted';
   return 'idle-healthy';
 }
 
