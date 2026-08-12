@@ -37,10 +37,10 @@ type AsyncHandler = (req: Request, res: Response) => Promise<void>;
 export function createApp() {
   const app = express();
 
-  // PaaS terminates TLS at reverse proxy: without this, req.ip points to the
-  // proxy address for EVERY visitor, so the rate limiter counts all traffic
-  // as one IP instead of one per visitor.
-  app.set('trust proxy', true);
+  // 1 = trust one reverse proxy hop (PaaS/Vercel/Railway).
+  // true would allow any X-Forwarded-For header, which express-rate-limit
+  // rejects as a bypass risk. 1 is safe and specific.
+  app.set('trust proxy', 1);
 
   app.use(express.json());
 
