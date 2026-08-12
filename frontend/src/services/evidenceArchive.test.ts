@@ -22,13 +22,26 @@ describe('committed proof archive', () => {
     expect(linkedRecords).toEqual([]);
   });
 
-  it('gives every execution record its executionId and decoded error', () => {
+  it('gives every execution record its executionId', () => {
     entries
       .filter((entry) => entry.kind === 'execution-record')
       .forEach((entry) => {
         expect(entry.executionId).toBeTruthy();
+      });
+  });
+
+  it('gives every refusal its decoded contract error', () => {
+    entries
+      .filter((entry) => entry.receiptStatus === 'reverted')
+      .forEach((entry) => {
         expect(entry.contractError).toBeTruthy();
       });
+  });
+
+  it('covers the live demo vault, not only the rehearsal rig', () => {
+    const demoEntries = entries.filter((entry) => entry.targetLabel === 'demo vault');
+    expect(demoEntries.length).toBeGreaterThanOrEqual(2);
+    expect(demoEntries.some((entry) => entry.receiptStatus === 'verified')).toBe(true);
   });
 
   it('gives every mined transaction a block number', () => {

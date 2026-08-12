@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { readCommittedSnapshot } from '@/services/chain/snapshot';
 import type { VaultSnapshot } from '@/types';
 import {
   computeProtectionFloorPrice,
@@ -8,7 +7,36 @@ import {
   resolveHealthStatus,
 } from '@/utils/health';
 
-const snapshot = readCommittedSnapshot();
+const snapshot: VaultSnapshot = {
+  vault: '0x4f634d7173eFf255973E762c3Fe04DF4887FfB35',
+  position: {
+    borrower: '0x0a25a241Ad0c397136dE68ccF2D9fC1EC68Dc7f2',
+    outstanding: 6_000_000_000n,
+    collateralAmount: 10_000_000_000_000_000_000_000n,
+    triggerBps: 13_000,
+    targetBps: 14_500,
+    maxRepayPerEvent: 2_000_000_000n,
+    isCouponSweepEnabled: true,
+    reserve: 3_000_000_000n,
+    lastActedRound: 0n,
+    isAgentRevoked: false,
+  },
+  guardRepayQuote: 0n,
+  couponDue: 112_500_000n,
+  healthRatioBps: 16_667,
+  liquidationBps: 11_000,
+  maxStaleSeconds: 3_600,
+  oracle: {
+    roundId: 3n,
+    price: 100_000_000n,
+    decimals: 8,
+    updatedAtSeconds: 1_786_384_066,
+    ageSeconds: 0,
+  },
+  tokens: { debtDecimals: 6, collateralDecimals: 18 },
+  observedAtSeconds: 1_786_384_066,
+  source: 'committed-snapshot',
+};
 
 function withPosition(overrides: Partial<VaultSnapshot['position']>): VaultSnapshot {
   return { ...snapshot, position: { ...snapshot.position, ...overrides } };
